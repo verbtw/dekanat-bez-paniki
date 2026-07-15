@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
 import type { InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
@@ -14,27 +14,31 @@ const navItems = [
 type NavId = (typeof navItems)[number]["id"];
 type Theme = "light" | "dark";
 type StorageMode = "checking" | "local" | "database";
+type InboxFilter = "all" | "attention";
 
 const workspaceStorageKey = "dbp:workspace:v1";
+function getWorkspaceStorageKey(workspace: string) {
+  return `${workspaceStorageKey}:${workspace || "demo"}`;
+}
 const roleLabel: Record<SourceRole, string> = {
   teacher: "преподаватель",
   "group-lead": "староста",
   student: "студент",
 };
 
-function saveWorkspace(items: InboxItem[]) {
+function saveWorkspace(items: InboxItem[], workspace = "") {
   window.localStorage.setItem(
-    workspaceStorageKey,
+    getWorkspaceStorageKey(workspace),
     JSON.stringify({ version: 1, items }),
   );
 }
 
-async function pushEventToServer(item: InboxItem) {
+async function pushEventToServer(item: InboxItem, workspace: string) {
   try {
     const response = await fetch("/api/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ item }),
+      body: JSON.stringify({ item, workspace }),
     });
     return response.ok;
   } catch {
@@ -42,12 +46,12 @@ async function pushEventToServer(item: InboxItem) {
   }
 }
 
-async function pushStatusToServer(id: string, status: ReviewStatus) {
+async function pushStatusToServer(id: string, status: ReviewStatus, workspace: string) {
   try {
     const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, workspace }),
     });
     return response.ok;
   } catch {
@@ -83,6 +87,20 @@ function sourceCountLabel(count: number) {
   return `${count} сообщений`;
 }
 
+function workspaceInitials(name: string) {
+  const words = name.replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/[\s-]+/).filter(Boolean);
+  return (words.slice(0, 2).map((word) => word[0]).join("") || "ГР").toUpperCase();
+}
+
+function eventSummary(item: InboxItem) {
+  return [
+    item.event.title,
+    `${humanDate(item.event.date)} · ${item.event.time} · ${item.event.room}`,
+    `Статус: ${statusLabel[item.status]}`,
+    `Источник: ${item.sources[0]?.text ?? "не указан"}`,
+  ].join("\n");
+}
+
 function EventsView({
   items,
   onOpen,
@@ -95,6 +113,12 @@ function EventsView({
   const datedItems = [...items].sort((left, right) =>
     left.event.date.localeCompare(right.event.date),
   );
+  const firstValidDate = datedItems.find((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.event.date));
+  const monthLabel = firstValidDate
+    ? new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(
+        new Date(`${firstValidDate.event.date}T12:00:00`),
+      )
+    : "Без даты";
 
   return (
     <section className="workspace-view">
@@ -115,7 +139,7 @@ function EventsView({
 
       <div className="calendar-board">
         <div className="calendar-heading">
-          <div><span className="eyebrow">Сентябрь 2026</span><h2>Ближайшие изменения</h2></div>
+          <div><span className="eyebrow">{monthLabel}</span><h2>Ближайшие изменения</h2></div>
           <span className="calendar-legend"><i /> источник сохранён</span>
         </div>
         <div className="event-table">
@@ -129,6 +153,9 @@ function EventsView({
               <span className="row-arrow">→</span>
             </button>
           ))}
+          {datedItems.length === 0 && (
+            <div className="empty-state"><span>□</span><strong>Событий пока нет</strong><p>Добавь сообщение или отправь его Telegram-боту.</p></div>
+          )}
         </div>
       </div>
     </section>
@@ -177,6 +204,9 @@ function SourcesView({ items }: { items: InboxItem[] }) {
               <footer><span>⌁ {source.chat}</span><b>{source.eventTitle}</b></footer>
             </article>
           ))}
+          {sources.length === 0 && (
+            <div className="empty-state"><span>⌁</span><strong>Источников пока нет</strong><p>Первое распознанное сообщение появится здесь.</p></div>
+          )}
         </div>
       </div>
     </section>
@@ -188,88 +218,140 @@ export function EvidenceDesk() {
   const [selectedId, setSelectedId] = useState(demoItems[0].id);
   const [activeNav, setActiveNav] = useState<NavId>("inbox");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<InboxFilter>("all");
   const [composerOpen, setComposerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
+  const [workspaceToken, setWorkspaceToken] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("ИВТ-101 · демо");
+  const [workspaceReady, setWorkspaceReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [storageMode, setStorageMode] = useState<StorageMode>("checking");
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const currentTheme = document.documentElement.dataset.theme;
       setTheme(currentTheme === "dark" ? "dark" : "light");
-
-      try {
-        const saved = window.localStorage.getItem(workspaceStorageKey);
-        if (saved) {
-          const parsed = JSON.parse(saved) as { version?: number; items?: InboxItem[] };
-          if (parsed.version === 1 && Array.isArray(parsed.items) && parsed.items.length > 0) {
-            setItems(parsed.items);
-            setSelectedId(parsed.items[0].id);
-          }
-        }
-      } catch {
-        window.localStorage.removeItem(workspaceStorageKey);
-      } finally {
-        setStorageReady(true);
-      }
+      setWorkspaceToken(new URLSearchParams(window.location.search).get("workspace")?.trim() || "");
+      setWorkspaceReady(true);
     });
 
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
+    if (!workspaceReady) return;
+    const frame = window.requestAnimationFrame(() => {
+      const key = getWorkspaceStorageKey(workspaceToken);
+      try {
+        const saved = window.localStorage.getItem(key);
+        if (saved) {
+          const parsed = JSON.parse(saved) as { version?: number; items?: InboxItem[] };
+          if (parsed.version === 1 && Array.isArray(parsed.items)) {
+            setItems(parsed.items);
+            setSelectedId(parsed.items[0]?.id ?? "");
+          }
+        } else if (workspaceToken) {
+          setItems([]);
+          setSelectedId("");
+        }
+      } catch {
+        window.localStorage.removeItem(key);
+      } finally {
+        setStorageReady(true);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [workspaceReady, workspaceToken]);
+
+  useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem(
-      workspaceStorageKey,
-      JSON.stringify({ version: 1, items }),
-    );
-  }, [items, storageReady]);
+    saveWorkspace(items, workspaceToken);
+  }, [items, storageReady, workspaceToken]);
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setComposerOpen(false);
+        setSettingsOpen(false);
+        setActionMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
 
   useEffect(() => {
     if (!storageReady) return;
     const controller = new AbortController();
 
-    fetch("/api/events", { signal: controller.signal })
-      .then((response) => response.json())
-      .then((data: { mode?: StorageMode; items?: InboxItem[] }) => {
+    const endpoint = workspaceToken
+      ? `/api/events?workspace=${encodeURIComponent(workspaceToken)}`
+      : "/api/events";
+    fetch(endpoint, { signal: controller.signal })
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          mode?: StorageMode;
+          items?: InboxItem[];
+          workspace?: { name?: string };
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error || "Не удалось загрузить рабочее пространство");
+        return data;
+      })
+      .then((data) => {
         if (data.mode !== "database") {
           setStorageMode("local");
           return;
         }
 
         setStorageMode("database");
-        if (!Array.isArray(data.items) || data.items.length === 0) return;
+        setWorkspaceName(data.workspace?.name || (workspaceToken ? "Telegram-группа" : "ИВТ-101 · демо"));
+        if (!Array.isArray(data.items)) return;
         setItems((current) => {
           const localOnly = current.filter(
             (local) => !data.items?.some((remote) => remote.id === local.id),
           );
           const merged = [...data.items!, ...localOnly];
-          saveWorkspace(merged);
+          saveWorkspace(merged, workspaceToken);
+          setSelectedId((selected) =>
+            merged.some((item) => item.id === selected) ? selected : (merged[0]?.id ?? ""),
+          );
           return merged;
         });
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setStorageMode("local");
+        setSyncError(error instanceof Error ? error.message : "Не удалось синхронизировать данные");
       });
 
     return () => controller.abort();
-  }, [storageReady]);
+  }, [storageReady, workspaceToken]);
 
   const visibleItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return items;
     return items.filter((item) =>
+      (filter === "all" || item.status !== "confirmed") &&
+      (!normalized ||
       [item.event.title, item.event.subject, ...item.sources.map((source) => source.text)]
         .join(" ")
         .toLowerCase()
-        .includes(normalized),
+        .includes(normalized)),
     );
-  }, [items, query]);
+  }, [filter, items, query]);
 
-  const selected = items.find((item) => item.id === selectedId) ?? items[0];
+  const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const navCounts: Record<NavId, number> = {
     inbox: items.length,
     events: items.length,
@@ -295,17 +377,58 @@ export function EvidenceDesk() {
   }
 
   function updateStatus(status: ReviewStatus) {
+    if (!selected) return;
     setItems((current) => {
       const next = current.map((item) =>
         item.id === selected.id ? { ...item, status } : item,
       );
-      saveWorkspace(next);
+      saveWorkspace(next, workspaceToken);
       return next;
     });
-    void pushStatusToServer(selected.id, status).then((synced) => {
-      if (synced) setStorageMode("database");
+    void pushStatusToServer(selected.id, status, workspaceToken).then((synced) => {
+      if (synced) {
+        setStorageMode("database");
+        setSyncError(null);
+      } else {
+        setSyncError("Изменение сохранено локально и ждёт синхронизации");
+      }
     });
-    flash(status === "confirmed" ? "Событие подтверждено" : "Отправлено на уточнение");
+    flash(status === "confirmed" ? "Событие подтверждено" : "Возвращено на проверку");
+  }
+
+  async function copyText(text: string, successMessage: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      flash(successMessage);
+    } catch {
+      flash("Не удалось скопировать — выдели текст вручную");
+    }
+  }
+
+  async function shareEvent() {
+    if (!selected) return;
+    const text = eventSummary(selected);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: selected.event.title, text, url: window.location.href });
+        flash("Карточка отправлена");
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    await copyText(`${text}\n${window.location.href}`, "Карточка скопирована");
+  }
+
+  function addSimilarMessage() {
+    if (!selected) return;
+    setNewMessage(selected.sources[0]?.text ?? "");
+    setActionMenuOpen(false);
+    setComposerOpen(true);
+  }
+
+  async function copyWorkspaceLink() {
+    await copyText(window.location.href, "Ссылка на рабочее пространство скопирована");
   }
 
   function addMessage(event: FormEvent<HTMLFormElement>) {
@@ -341,14 +464,19 @@ export function EvidenceDesk() {
 
     setItems((current) => {
       const next = [item, ...current];
-      saveWorkspace(next);
+      saveWorkspace(next, workspaceToken);
       return next;
     });
     setSelectedId(id);
     setNewMessage("");
     setComposerOpen(false);
-    void pushEventToServer(item).then((synced) => {
-      if (synced) setStorageMode("database");
+    void pushEventToServer(item, workspaceToken).then((synced) => {
+      if (synced) {
+        setStorageMode("database");
+        setSyncError(null);
+      } else {
+        setSyncError("Новое событие сохранено локально и ждёт синхронизации");
+      }
     });
     flash("Сообщение распознано");
   }
@@ -375,6 +503,7 @@ export function EvidenceDesk() {
               key={item.id}
               className={activeNav === item.id ? "nav-button active" : "nav-button"}
               onClick={() => setActiveNav(item.id)}
+              aria-label={item.label}
             >
               <span className="nav-icon" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
@@ -384,12 +513,12 @@ export function EvidenceDesk() {
         </nav>
 
         <div className="group-card">
-          <div className="group-avatar">ИВ</div>
+          <div className="group-avatar">{workspaceInitials(workspaceName)}</div>
           <div>
-            <strong>ИВТ-101</strong>
-            <small><span className="online-dot" /> 24 участника</small>
+            <strong>{workspaceName}</strong>
+            <small><span className="online-dot" /> {workspaceToken ? "Telegram workspace" : "демо-режим"}</small>
           </div>
-          <button aria-label="Настройки группы">•••</button>
+          <button aria-label="Настройки группы" onClick={() => setSettingsOpen(true)}>•••</button>
         </div>
 
         <button
@@ -405,18 +534,22 @@ export function EvidenceDesk() {
           <span className={`theme-switch ${theme}`}><i /></span>
         </button>
 
-        <div className="sync-card">
+        <div className={syncError ? "sync-card error" : "sync-card"}>
           <span className="sync-pulse" />
           <div>
             <strong>
-              {storageMode === "database"
+              {syncError
+                ? "Нужна синхронизация"
+                : storageMode === "database"
                 ? "PostgreSQL подключён"
                 : storageMode === "checking"
                   ? "Проверяю хранилище"
                   : "Локальное хранение"}
             </strong>
             <small>
-              {storageMode === "database"
+              {syncError
+                ? syncError
+                : storageMode === "database"
                 ? "события синхронизируются"
                 : "работает без внешних ключей"}
             </small>
@@ -440,6 +573,7 @@ export function EvidenceDesk() {
         <label className="search-field">
           <span aria-hidden="true">⌕</span>
           <input
+            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Поиск по сообщениям"
@@ -449,16 +583,19 @@ export function EvidenceDesk() {
         </label>
 
         <div className="filter-row">
-          <button className="filter active">Все <span>{items.length}</span></button>
-          <button className="filter">На проверку <span>{items.filter((item) => item.status !== "confirmed").length}</span></button>
+          <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>Все <span>{items.length}</span></button>
+          <button className={filter === "attention" ? "filter active" : "filter"} onClick={() => setFilter("attention")}>На проверку <span>{items.filter((item) => item.status !== "confirmed").length}</span></button>
         </div>
 
         <div className="inbox-list" aria-live="polite">
           {visibleItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setSelectedId(item.id)}
-              className={selected.id === item.id ? `inbox-item selected ${item.status}` : `inbox-item ${item.status}`}
+              onClick={() => {
+                setSelectedId(item.id);
+                setActionMenuOpen(false);
+              }}
+              className={selected?.id === item.id ? `inbox-item selected ${item.status}` : `inbox-item ${item.status}`}
             >
               <span className="item-topline">
                 <span className={`status-dot ${item.status}`} />
@@ -489,12 +626,23 @@ export function EvidenceDesk() {
         </div>
       </section>
 
+      {selected ? (
       <section className="evidence-panel">
         <header className="evidence-header">
           <div className="breadcrumb"><span>Входящие</span><b>/</b>{selected.id}</div>
           <div className="header-actions">
-            <button aria-label="Поделиться">↗</button>
-            <button aria-label="Больше действий">•••</button>
+            <button aria-label="Поделиться" onClick={() => void shareEvent()}>↗</button>
+            <button
+              aria-label="Больше действий"
+              aria-expanded={actionMenuOpen}
+              onClick={() => setActionMenuOpen((open) => !open)}
+            >•••</button>
+            {actionMenuOpen && (
+              <div className="action-menu">
+                <button onClick={() => void copyText(eventSummary(selected), "Карточка скопирована")}>Копировать карточку</button>
+                <button onClick={addSimilarMessage}>Добавить похожее</button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -568,13 +716,23 @@ export function EvidenceDesk() {
             <p><strong>Проверь решение</strong><small>Изменения попадут в календарь группы</small></p>
           </div>
           <div className="decision-actions">
-            <button className="secondary-button" onClick={() => updateStatus("review")}>Уточнить</button>
-            <button className="primary-button" onClick={() => updateStatus("confirmed")}>
-              <span>✓</span> Подтвердить
+            <button className="secondary-button" onClick={() => updateStatus("review")} disabled={selected.status === "review"}>Вернуть на проверку</button>
+            <button className="primary-button" onClick={() => updateStatus("confirmed")} disabled={selected.status === "confirmed"}>
+              <span>✓</span> {selected.status === "confirmed" ? "Подтверждено" : "Подтвердить"}
             </button>
           </div>
         </footer>
       </section>
+      ) : (
+        <section className="evidence-panel evidence-empty">
+          <div className="empty-state">
+            <span>↙</span>
+            <strong>Сообщений пока нет</strong>
+            <p>Добавь сообщение на сайте или пришли его Telegram-боту.</p>
+            <button className="primary-button" onClick={() => setComposerOpen(true)}>＋ Добавить сообщение</button>
+          </div>
+        </section>
+      )}
         </>
       ) : activeNav === "events" ? (
         <EventsView
@@ -584,6 +742,29 @@ export function EvidenceDesk() {
         />
       ) : (
         <SourcesView items={items} />
+      )}
+
+      {settingsOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+          <section className="composer settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="composer-heading">
+              <div>
+                <span className="eyebrow">Рабочее пространство</span>
+                <h2 id="settings-title">{workspaceName}</h2>
+              </div>
+              <button type="button" onClick={() => setSettingsOpen(false)} aria-label="Закрыть">×</button>
+            </div>
+            <div className="settings-status">
+              <span className={storageMode === "database" ? "online-dot" : "status-dot review"} />
+              <div><strong>{storageMode === "database" ? "Синхронизация включена" : "Локальный режим"}</strong><small>{syncError || "События сохраняются в PostgreSQL и на этом устройстве"}</small></div>
+            </div>
+            <p>{workspaceToken ? "Эта ссылка даёт доступ к событиям Telegram-группы. Передавай её только участникам группы." : "Сейчас открыто публичное демо. Персональная рабочая ссылка появится после сообщения Telegram-боту."}</p>
+            <div className="settings-actions">
+              <button className="secondary-button" type="button" onClick={() => void copyWorkspaceLink()}>Копировать ссылку</button>
+              <a className="primary-button" href="https://t.me/dekanat_panic_test_bot" target="_blank" rel="noreferrer">Открыть бота ↗</a>
+            </div>
+          </section>
+        </div>
       )}
 
       {composerOpen && (
@@ -611,7 +792,7 @@ export function EvidenceDesk() {
               >
                 Вставить пример
               </button>
-              <span>Данные останутся только в браузере</span>
+              <span>{storageMode === "database" ? `Сохранится в ${workspaceName}` : "Сохранится локально до восстановления связи"}</span>
             </div>
             <button className="primary-button wide" type="submit" disabled={!newMessage.trim()}>
               Распознать сообщение <span>→</span>

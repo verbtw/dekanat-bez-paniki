@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import { updateEventStatus } from "@/db/repository";
+import { demoGroupId, findGroupByAccessToken, updateEventStatus } from "@/db/repository";
 import { reviewStatusSchema } from "@/lib/event-validation";
 
 export async function PATCH(
@@ -27,7 +27,18 @@ export async function PATCH(
   }
 
   try {
-    const updated = await updateEventStatus(id, parsed.data);
+    const workspace =
+      typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
+        ? body.workspace.trim()
+        : "";
+    const group = workspace ? await findGroupByAccessToken(workspace) : null;
+    if (workspace && !group) {
+      return NextResponse.json(
+        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+    const updated = await updateEventStatus(id, parsed.data, group?.id ?? demoGroupId);
     if (!updated) {
       return NextResponse.json({ error: "Событие не найдено." }, { status: 404 });
     }

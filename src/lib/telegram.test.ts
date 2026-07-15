@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sendTelegramMessage } from "./telegram";
+import { answerTelegramCallback, sendTelegramMessage } from "./telegram";
 
 const originalToken = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -30,5 +30,37 @@ describe("sendTelegramMessage", () => {
       sent: false,
       reason: "network-error",
     });
+  });
+
+  it("sends inline actions and callback answers through the expected methods", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "test-token";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendTelegramMessage("10", "event", {
+      replyMarkup: { inline_keyboard: [[{ text: "Confirm", callback_data: "confirm:1" }]] },
+      replyToMessageId: 5,
+    });
+    await answerTelegramCallback("callback-1", "done");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.telegram.org/bottest-token/sendMessage",
+      expect.objectContaining({
+        body: JSON.stringify({
+          chat_id: "10",
+          text: "event",
+          reply_markup: {
+            inline_keyboard: [[{ text: "Confirm", callback_data: "confirm:1" }]],
+          },
+          reply_parameters: { message_id: 5 },
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.telegram.org/bottest-token/answerCallbackQuery",
+      expect.any(Object),
+    );
   });
 });

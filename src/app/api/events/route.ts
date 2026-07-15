@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DatabaseNotConfiguredError, isDatabaseConfigured } from "@/db/client";
-import { demoGroupId, listEvents, saveEvent } from "@/db/repository";
+import { demoGroupId, findGroupByAccessToken, listEvents, saveEvent } from "@/db/repository";
 import { inboxItemSchema } from "@/lib/event-validation";
 
 export async function GET(request: NextRequest) {
@@ -8,10 +8,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ mode: "local", items: [] });
   }
 
-  const groupId = request.nextUrl.searchParams.get("groupId")?.trim() || demoGroupId;
+  const workspace = request.nextUrl.searchParams.get("workspace")?.trim();
   try {
+    const group = workspace ? await findGroupByAccessToken(workspace) : null;
+    if (workspace && !group) {
+      return NextResponse.json(
+        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+    const groupId = group?.id ?? demoGroupId;
     const items = await listEvents(groupId);
-    return NextResponse.json({ mode: "database", items });
+    return NextResponse.json({
+      mode: "database",
+      items,
+      workspace: group ? { name: group.name } : { name: "ИВТ-101 · демо" },
+    });
   } catch {
     return NextResponse.json(
       { error: "Не удалось прочитать события из базы.", code: "DATABASE_READ_FAILED" },
@@ -39,12 +51,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const groupId =
-    typeof body === "object" && body !== null && "groupId" in body && typeof body.groupId === "string"
-      ? body.groupId.trim() || demoGroupId
-      : demoGroupId;
-
   try {
+    const workspace =
+      typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
+        ? body.workspace.trim()
+        : "";
+    const group = workspace ? await findGroupByAccessToken(workspace) : null;
+    if (workspace && !group) {
+      return NextResponse.json(
+        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+    const groupId = group?.id ?? demoGroupId;
     await saveEvent(parsed.data, groupId);
     return NextResponse.json({ saved: true, item: parsed.data }, { status: 201 });
   } catch (error) {

@@ -26,7 +26,7 @@ const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, 
   body: JSON.stringify({
     url: `${appUrl}/api/telegram/webhook`,
     secret_token: secret,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
     drop_pending_updates: true,
   }),
 });
@@ -34,4 +34,21 @@ const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, 
 const result = await response.json();
 if (!response.ok || !result.ok) throw new Error(result.description || "Telegram rejected webhook");
 
-console.log(`Webhook configured: ${appUrl}/api/telegram/webhook`);
+const commandsResponse = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    commands: [
+      { command: "start", description: "Как пользоваться ботом" },
+      { command: "events", description: "Последние события этого чата" },
+      { command: "status", description: "Состояние бота и базы" },
+      { command: "help", description: "Показать подсказку" },
+    ],
+  }),
+});
+const commandsResult = await commandsResponse.json();
+if (!commandsResponse.ok || !commandsResult.ok) {
+  throw new Error(commandsResult.description || "Telegram rejected bot commands");
+}
+
+console.log(`Webhook and commands configured: ${appUrl}/api/telegram/webhook`);

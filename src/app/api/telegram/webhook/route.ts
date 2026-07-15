@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import { saveEvent } from "@/db/repository";
+import { findGroupById, listEvents, saveEvent, updateEventStatus } from "@/db/repository";
 import { extractEvent } from "@/lib/extract-event";
-import { sendTelegramMessage } from "@/lib/telegram";
+import {
+  buildTelegramEventKeyboard,
+  buildTelegramEventText,
+  buildTelegramEventsText,
+  buildTelegramHelpText,
+  buildTelegramStatusText,
+  parseConfirmCallback,
+  parseTelegramCommand,
+} from "@/lib/telegram-bot";
+import {
+  answerTelegramCallback,
+  editTelegramMessageKeyboard,
+  sendTelegramMessage,
+} from "@/lib/telegram";
 import type { InboxItem } from "@/lib/types";
 
 type TelegramUpdate = {
@@ -13,6 +26,14 @@ type TelegramUpdate = {
     text?: string;
     chat?: { id?: number; title?: string; type?: string };
     from?: { first_name?: string; last_name?: string; username?: string };
+  };
+  callback_query?: {
+    id?: string;
+    data?: string;
+    message?: {
+      message_id?: number;
+      chat?: { id?: number; title?: string; type?: string };
+    };
   };
 };
 
@@ -70,26 +91,100 @@ export async function POST(request: NextRequest) {
   }
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
+  if (!update) {
+    return NextResponse.json({ ok: true, skipped: "invalid-update" });
+  }
+
+  const callback = update.callback_query;
+  if (callback) {
+    const callbackId = callback.id;
+    const chatId = callback.message?.chat?.id;
+    const botMessageId = callback.message?.message_id;
+    const eventId = parseConfirmCallback(callback.data);
+    if (!callbackId || chatId === undefined || botMessageId === undefined || !eventId) {
+      if (callbackId) await answerTelegramCallback(callbackId, "Не удалось распознать действие.");
+      return NextResponse.json({ ok: true, skipped: "invalid-callback" });
+    }
+
+    if (!eventId.startsWith(`tg:${chatId}:`)) {
+      await answerTelegramCallback(callbackId, "Это событие относится к другому чату.");
+      return NextResponse.json({ ok: true, skipped: "callback-chat-mismatch" });
+    }
+
+    const groupId = `telegram:${chatId}`;
+    const updated = isDatabaseConfigured()
+      ? await updateEventStatus(eventId, "confirmed", groupId).catch(() => null)
+      : null;
+    if (!updated) {
+      await answerTelegramCallback(callbackId, "Событие не найдено или база недоступна.");
+      return NextResponse.json({ ok: true, callback: "not-found" });
+    }
+
+    const appUrl = process.env.APP_URL?.trim() || "https://dekanat-bez-paniki.vercel.app";
+    const group = await findGroupById(groupId).catch(() => null);
+    const workspaceUrl = group
+      ? `${appUrl}?workspace=${encodeURIComponent(group.accessToken)}`
+      : appUrl;
+    await Promise.all([
+      answerTelegramCallback(callbackId, "Событие подтверждено ✅"),
+      editTelegramMessageKeyboard(String(chatId), botMessageId, {
+        inline_keyboard: [[{ text: "🌐 Открыть приложение", url: workspaceUrl }]],
+      }),
+    ]);
+    return NextResponse.json({ ok: true, callback: "confirmed", eventId });
+  }
+
   const text = update?.message?.text?.trim();
-  if (!update || !text) {
+  if (!text) {
     return NextResponse.json({ ok: true, skipped: "unsupported-message" });
   }
 
-  const item = buildInboxItem(update, text);
   const chatId = update.message?.chat?.id;
-  if (!item || chatId === undefined) {
+  const messageId = update.message?.message_id;
+  if (chatId === undefined) {
+    return NextResponse.json({ ok: true, skipped: "missing-identifiers" });
+  }
+
+  const appUrl = process.env.APP_URL?.trim() || "https://dekanat-bez-paniki.vercel.app";
+  const command = parseTelegramCommand(text);
+  if (command) {
+    let replyText: string;
+    if (command === "start" || command === "help" || command === "unknown") {
+      replyText = buildTelegramHelpText(appUrl);
+    } else if (command === "status") {
+      replyText = buildTelegramStatusText(isDatabaseConfigured());
+    } else if (!isDatabaseConfigured()) {
+      replyText = "🟡 База пока не подключена, список событий недоступен.";
+    } else {
+      try {
+        replyText = buildTelegramEventsText(await listEvents(`telegram:${chatId}`));
+      } catch {
+        replyText = "Не удалось загрузить события. Попробуй ещё раз чуть позже.";
+      }
+    }
+
+    const reply = await sendTelegramMessage(String(chatId), replyText, {
+      replyToMessageId: messageId,
+    });
+    return NextResponse.json({ ok: true, command, replySent: reply.sent });
+  }
+
+  const item = buildInboxItem(update, text);
+  if (!item) {
     return NextResponse.json({ ok: true, skipped: "missing-identifiers" });
   }
 
   let stored = false;
+  let workspaceToken: string | null = null;
   if (isDatabaseConfigured()) {
     const groupId = `telegram:${chatId}`;
     try {
-      await saveEvent(item, groupId, {
+      const group = await saveEvent(item, groupId, {
         name: update.message?.chat?.title || "Telegram",
         telegramChatId: String(chatId),
       });
       stored = true;
+      workspaceToken = group.accessToken;
     } catch {
       return NextResponse.json({ ok: false, code: "DATABASE_WRITE_FAILED" }, { status: 500 });
     }
@@ -97,13 +192,15 @@ export async function POST(request: NextRequest) {
 
   const reply = await sendTelegramMessage(
     String(chatId),
-    [
-      `Нашёл событие: ${item.event.title}`,
-      `Дата: ${item.event.date}`,
-      `Время: ${item.event.time}`,
-      `Аудитория: ${item.event.room}`,
-      stored ? "Сохранил для проверки." : "База пока не подключена — открой веб-приложение для локальной проверки.",
-    ].join("\n"),
+    buildTelegramEventText(item, stored),
+    {
+      replyToMessageId: messageId,
+      replyMarkup: buildTelegramEventKeyboard(
+        item,
+        stored,
+        workspaceToken ? `${appUrl}?workspace=${encodeURIComponent(workspaceToken)}` : appUrl,
+      ),
+    },
   );
 
   return NextResponse.json({

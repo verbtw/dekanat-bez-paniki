@@ -1,0 +1,2 @@
+ALTER TABLE "groups" ADD COLUMN "access_token" text DEFAULT gen_random_uuid()::text NOT NULL;--> statement-breakpoint
+ALTER TABLE "groups" ADD CONSTRAINT "groups_access_token_unique" UNIQUE("access_token");

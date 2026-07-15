@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -17,6 +17,10 @@ export const groups = pgTable("groups", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   telegramChatId: text("telegram_chat_id").unique(),
+  accessToken: text("access_token")
+    .notNull()
+    .unique()
+    .default(sql`gen_random_uuid()::text`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

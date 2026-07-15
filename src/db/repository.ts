@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { InboxItem, ReviewStatus } from "@/lib/types";
 import { getDb } from "./client";
 import { events, groups, sources, type EventRow, type SourceRow } from "./schema";
@@ -41,7 +41,7 @@ export async function ensureGroup(input: {
   telegramChatId?: string;
 }) {
   const db = getDb();
-  await db
+  const [group] = await db
     .insert(groups)
     .values(input)
     .onConflictDoUpdate({
@@ -51,7 +51,30 @@ export async function ensureGroup(input: {
         telegramChatId: input.telegramChatId,
         updatedAt: new Date(),
       },
-    });
+    })
+    .returning({ id: groups.id, name: groups.name, accessToken: groups.accessToken });
+  if (!group) throw new Error("GROUP_UPSERT_FAILED");
+  return group;
+}
+
+export async function findGroupByAccessToken(accessToken: string) {
+  const db = getDb();
+  const [group] = await db
+    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken })
+    .from(groups)
+    .where(eq(groups.accessToken, accessToken))
+    .limit(1);
+  return group ?? null;
+}
+
+export async function findGroupById(id: string) {
+  const db = getDb();
+  const [group] = await db
+    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken })
+    .from(groups)
+    .where(eq(groups.id, id))
+    .limit(1);
+  return group ?? null;
 }
 
 export async function listEvents(groupId = demoGroupId): Promise<InboxItem[]> {
@@ -81,7 +104,7 @@ export async function saveEvent(
   group?: { name?: string; telegramChatId?: string },
 ) {
   const db = getDb();
-  await ensureGroup({
+  const savedGroup = await ensureGroup({
     id: groupId,
     name: group?.name ?? (groupId === demoGroupId ? "ИВТ-101" : groupId),
     telegramChatId: group?.telegramChatId,
@@ -119,7 +142,7 @@ export async function saveEvent(
 
   if (item.sources.length === 0) {
     await eventUpsert;
-    return;
+    return savedGroup;
   }
 
   const sourceUpsert = db
@@ -149,14 +172,15 @@ export async function saveEvent(
     });
 
   await db.batch([eventUpsert, sourceUpsert]);
+  return savedGroup;
 }
 
-export async function updateEventStatus(id: string, status: ReviewStatus) {
+export async function updateEventStatus(id: string, status: ReviewStatus, groupId?: string) {
   const db = getDb();
   const [updated] = await db
     .update(events)
     .set({ status, updatedAt: new Date() })
-    .where(eq(events.id, id))
+    .where(groupId ? and(eq(events.id, id), eq(events.groupId, groupId)) : eq(events.id, id))
     .returning({ id: events.id, status: events.status });
   return updated ?? null;
 }

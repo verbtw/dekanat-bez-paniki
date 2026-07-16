@@ -7,6 +7,7 @@ import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-det
 import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
 import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
+import { buildSharedMessage } from "@/lib/share-target";
 import {
   buildWorkspaceBackup,
   mergeBackupItems,
@@ -463,10 +464,30 @@ export function EvidenceDesk() {
       const currentTheme = document.documentElement.dataset.theme;
       setTheme(currentTheme === "dark" ? "dark" : "light");
       const params = new URLSearchParams(window.location.search);
-      setWorkspaceToken(params.get("workspace")?.trim() || "");
+      const isShareTarget = params.get("share") === "1";
+      const urlWorkspace = params.get("workspace")?.trim() || "";
+      const workspace = urlWorkspace || (isShareTarget
+        ? window.localStorage.getItem("dbp:last-workspace")?.trim() || ""
+        : "");
+      setWorkspaceToken(workspace);
+      if (urlWorkspace) window.localStorage.setItem("dbp:last-workspace", urlWorkspace);
       setRequestedEventId(params.get("event")?.trim() || "");
       const requestedView = params.get("view");
       if (navItems.some((item) => item.id === requestedView)) setActiveNav(requestedView as NavId);
+      if (isShareTarget) {
+        const shared = buildSharedMessage({
+          title: params.get("title"),
+          text: params.get("text"),
+          url: params.get("url"),
+        });
+        if (shared) {
+          setNewMessage(shared);
+          setComposerOpen(true);
+        }
+        const cleanUrl = new URL(window.location.origin + window.location.pathname);
+        if (workspace) cleanUrl.searchParams.set("workspace", workspace);
+        window.history.replaceState(null, "", cleanUrl);
+      }
       setWorkspaceReady(true);
     });
 

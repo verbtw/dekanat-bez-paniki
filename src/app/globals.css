@@ -598,7 +598,7 @@ textarea:focus-visible {
 .example-row button { padding: 0; border: 0; background: transparent; color: var(--cobalt); font-size: 9px; font-weight: 650; cursor: pointer; }
 .example-row span { color: #979fb1; font-size: 8px; }
 .primary-button.wide { width: 100%; padding: 12px 16px; font-size: 11px; }
-.settings-dialog { width: min(460px, 100%); }
+.settings-dialog { width: min(560px, 100%); max-height: min(90vh, 760px); overflow-y: auto; }
 .settings-status { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 13px 14px; border: 1px solid #e1e5ef; border-radius: 11px; background: #f7f9fd; }
 .settings-status > span { flex: 0 0 auto; }
 .settings-status strong,
@@ -618,6 +618,16 @@ textarea:focus-visible {
 .calendar-connect a { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--cobalt); font-size: 8px; font-weight: 680; text-align: center; text-decoration: none; cursor: pointer; }
 .calendar-connect button { grid-column: 2 / 3; }
 .calendar-connect a { grid-column: 3 / 4; }
+.backup-connect { display: grid; grid-template-columns: 38px repeat(3, minmax(0, 1fr)); gap: 8px 10px; margin: 0 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); }
+.backup-connect > div { grid-column: 2 / 5; }
+.backup-connect strong,
+.backup-connect small { display: block; }
+.backup-connect strong { font-size: 10px; }
+.backup-connect small { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.45; }
+.backup-connect button { padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--cobalt); font-size: 8px; font-weight: 680; cursor: pointer; }
+.backup-connect button:nth-of-type(1) { grid-column: 2; }
+.backup-connect .backup-reset { color: var(--coral); }
+.visually-hidden { position: fixed !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; }
 .workspace-header-actions { display: flex; align-items: center; gap: 9px; }
 .edit-dialog { width: min(560px, 100%); }
 .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }

@@ -7,6 +7,12 @@ import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-det
 import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
 import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
+import {
+  buildWorkspaceBackup,
+  mergeBackupItems,
+  parseWorkspaceBackup,
+  workspaceBackupFilename,
+} from "@/lib/workspace-backup";
 
 const navItems = [
   { id: "inbox", icon: "↙", label: "Входящие" },
@@ -450,6 +456,7 @@ export function EvidenceDesk() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -734,6 +741,62 @@ export function EvidenceDesk() {
 
   async function copyCalendarFeed() {
     await copyText(calendarFeedUrl(), "Ссылка календаря скопирована");
+  }
+
+  function exportWorkspaceBackup() {
+    const backup = buildWorkspaceBackup(workspaceName, items);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json;charset=utf-8",
+    }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = workspaceBackupFilename(workspaceName);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    flash(`Резервная копия: ${items.length} карточек`);
+  }
+
+  async function importWorkspaceBackup(file: File | undefined) {
+    if (!file) return;
+    try {
+      if (file.size > 5_000_000) throw new Error("BACKUP_TOO_LARGE");
+      const parsedJson: unknown = JSON.parse(await file.text());
+      const parsed = parseWorkspaceBackup(parsedJson);
+      if (!parsed.success) throw new Error("BACKUP_INVALID");
+      const merged = mergeBackupItems(items, parsed.data.items);
+      setItems(merged);
+      saveWorkspace(merged, workspaceToken);
+      setSelectedId(parsed.data.items[0]?.id ?? merged[0]?.id ?? "");
+
+      if (workspaceToken && parsed.data.items.length) {
+        setSyncing(true);
+        const results = await Promise.all(
+          parsed.data.items.map((item) => pushEventToServer(item, workspaceToken)),
+        );
+        if (results.includes("failed")) {
+          setSyncError("Импорт сохранён локально, но часть карточек ждёт синхронизации");
+        } else {
+          setStorageMode("database");
+          setSyncError(null);
+        }
+      }
+      flash(`Импортировано карточек: ${parsed.data.items.length}`);
+    } catch {
+      flash("Файл не похож на корректную резервную копию");
+    } finally {
+      setSyncing(false);
+      if (backupInputRef.current) backupInputRef.current.value = "";
+    }
+  }
+
+  function resetDemoWorkspace() {
+    if (workspaceToken) return;
+    setItems(demoItems);
+    selectEvent(demoItems[0].id);
+    saveWorkspace(demoItems);
+    setSyncError(null);
+    setStorageMode("local");
+    flash("Демо восстановлено до исходного состояния");
   }
 
   function openEditor() {
@@ -1219,7 +1282,12 @@ export function EvidenceDesk() {
             </div>
             <div className="settings-status">
               <span className={storageMode === "database" ? "online-dot" : "status-dot review"} />
-              <div><strong>{storageMode === "database" ? "Синхронизация включена" : "Локальный режим"}</strong><small>{syncError || "События сохраняются в PostgreSQL и на этом устройстве"}</small></div>
+              <div>
+                <strong>{storageMode === "database" ? "Синхронизация включена" : "Локальный режим"}</strong>
+                <small>{syncError || (storageMode === "database"
+                  ? "События сохраняются в PostgreSQL и на этом устройстве"
+                  : "Демо и эксперименты хранятся только в этом браузере")}</small>
+              </div>
             </div>
             <p>{workspaceToken ? "Эта ссылка даёт доступ к событиям Telegram-группы. Передавай её только участникам группы." : "Сейчас открыто публичное демо. Персональная рабочая ссылка появится после сообщения Telegram-боту."}</p>
             <div className="calendar-connect">
@@ -1227,6 +1295,20 @@ export function EvidenceDesk() {
               <div><strong>Живой календарь группы</strong><small>Только подтверждённые события. Google, Apple и Outlook проверяют эту ленту автоматически.</small></div>
               <button type="button" onClick={() => void copyCalendarFeed()}>Копировать URL</button>
               <a href={workspaceToken ? `/api/calendar?workspace=${encodeURIComponent(workspaceToken)}` : "/api/calendar"} download>Скачать .ics</a>
+            </div>
+            <div className="backup-connect">
+              <span className="calendar-connect-icon">⇩</span>
+              <div><strong>Резервная копия данных</strong><small>Версионированный JSON содержит карточки, источники и журнал решений, но не содержит секретный workspace-token.</small></div>
+              <button type="button" onClick={exportWorkspaceBackup}>Скачать JSON</button>
+              <button type="button" onClick={() => backupInputRef.current?.click()}>Импортировать</button>
+              {!workspaceToken && <button className="backup-reset" type="button" onClick={resetDemoWorkspace}>Сбросить демо</button>}
+              <input
+                ref={backupInputRef}
+                className="visually-hidden"
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => void importWorkspaceBackup(event.target.files?.[0])}
+              />
             </div>
             <div className="settings-actions">
               <button className="secondary-button" type="button" onClick={() => void retrySync()} disabled={syncing}>{syncing ? "Синхронизация…" : "Повторить синхронизацию"}</button>

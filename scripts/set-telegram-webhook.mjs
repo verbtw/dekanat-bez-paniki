@@ -48,6 +48,8 @@ const commandsResponse = await fetch(`https://api.telegram.org/bot${token}/setMy
       { command: "trusted", description: "Доверенные преподаватели" },
       { command: "trust", description: "Назначить преподавателя (админ)" },
       { command: "untrust", description: "Снять роль преподавателя (админ)" },
+      { command: "brief_on", description: "Включить сводку в 08:00 МСК" },
+      { command: "brief_off", description: "Отключить утреннюю сводку" },
       { command: "status", description: "Состояние бота и базы" },
       { command: "help", description: "Показать подсказку" },
     ],

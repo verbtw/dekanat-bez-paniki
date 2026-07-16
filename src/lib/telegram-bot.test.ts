@@ -23,6 +23,7 @@ describe("Telegram bot commands", () => {
     expect(parseTelegramCommand("/digest")).toBe("digest");
     expect(parseTelegramCommand("/trust @teacher")).toBe("trust");
     expect(parseTelegramCommand("/trusted")).toBe("trusted");
+    expect(parseTelegramCommand("/brief_on")).toBe("brief_on");
     expect(parseTelegramCommand("/wat")).toBe("unknown");
     expect(parseTelegramCommand("Перенесли пару")).toBeNull();
   });

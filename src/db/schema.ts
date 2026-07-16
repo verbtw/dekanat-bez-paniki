@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -22,6 +23,7 @@ export const groups = pgTable("groups", {
     .unique()
     .default(sql`gen_random_uuid()::text`),
   trustedUsernames: jsonb("trusted_usernames").$type<string[]>().notNull().default([]),
+  dailyBriefEnabled: boolean("daily_brief_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

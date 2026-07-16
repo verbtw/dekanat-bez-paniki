@@ -2,8 +2,8 @@ import type { InboxItem } from "./types";
 import type { TelegramInlineKeyboardMarkup } from "./telegram";
 import { buildAgendaText, type BriefingPeriod } from "./briefing";
 
-export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "trust" | "untrust" | "trusted" | "unknown" | null;
-const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest", "trust", "untrust", "trusted"] as const;
+export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "trust" | "untrust" | "trusted" | "brief_on" | "brief_off" | "unknown" | null;
+const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest", "trust", "untrust", "trusted", "brief_on", "brief_off"] as const;
 
 export function parseTelegramCommand(text: string): TelegramBotCommand {
   const token = text.trim().split(/\s+/, 1)[0];
@@ -32,6 +32,8 @@ export function buildTelegramHelpText(appUrl: string) {
     "/trusted — доверенные преподаватели",
     "/trust @username — назначить преподавателя (только админ)",
     "/untrust @username — снять роль (только админ)",
+    "/brief_on — утренняя сводка в 08:00 МСК",
+    "/brief_off — отключить утреннюю сводку",
     "/status — состояние бота и базы",
     "/help — эта подсказка",
     "",

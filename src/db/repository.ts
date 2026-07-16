@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { EvidenceSource, ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
 import { getDb } from "./client";
 import {
@@ -120,6 +120,24 @@ export async function setGroupTrustedUsername(
     .where(eq(groups.id, groupId))
     .returning({ trustedUsernames: groups.trustedUsernames });
   return updated ?? null;
+}
+
+export async function setGroupDailyBrief(groupId: string, enabled: boolean) {
+  const db = getDb();
+  const [updated] = await db
+    .update(groups)
+    .set({ dailyBriefEnabled: enabled, updatedAt: new Date() })
+    .where(eq(groups.id, groupId))
+    .returning({ dailyBriefEnabled: groups.dailyBriefEnabled });
+  return updated ?? null;
+}
+
+export async function listDailyBriefGroups() {
+  const db = getDb();
+  return db
+    .select({ id: groups.id, name: groups.name, telegramChatId: groups.telegramChatId })
+    .from(groups)
+    .where(and(eq(groups.dailyBriefEnabled, true), isNotNull(groups.telegramChatId)));
 }
 
 export async function listEvents(groupId = demoGroupId): Promise<InboxItem[]> {

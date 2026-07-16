@@ -1,0 +1,1 @@
+ALTER TABLE "groups" ADD COLUMN "daily_brief_enabled" boolean DEFAULT false NOT NULL;

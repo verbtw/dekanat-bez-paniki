@@ -6,6 +6,7 @@ import {
   findGroupById,
   listEvents,
   saveEvent,
+  setGroupDailyBrief,
   setGroupTrustedUsername,
   updateEventStatus,
 } from "@/db/repository";
@@ -170,6 +171,37 @@ export async function POST(request: NextRequest) {
       replyText = buildTelegramStatusText(isDatabaseConfigured());
     } else if (!isDatabaseConfigured()) {
       replyText = "🟡 База пока не подключена, список событий недоступен.";
+    } else if (command === "brief_on" || command === "brief_off") {
+      const groupId = `telegram:${chatId}`;
+      const senderId = update.message?.from?.id;
+      try {
+        if (senderId === undefined) {
+          replyText = "Не удалось проверить права отправителя.";
+        } else {
+          const privateChat = update.message?.chat?.type === "private";
+          const access = privateChat
+            ? { verified: true, administrator: true }
+            : await getTelegramMemberAccess(String(chatId), senderId);
+          if (!access.verified || !access.administrator) {
+            replyText = "⛔ В группе управлять сводкой может только администратор Telegram-чата.";
+          } else {
+            await ensureGroup({
+              id: groupId,
+              name: update.message?.chat?.title || "Личный Telegram",
+              telegramChatId: String(chatId),
+            });
+            const enabled = command === "brief_on";
+            const updated = await setGroupDailyBrief(groupId, enabled);
+            replyText = updated
+              ? enabled
+                ? "☀️ Утренняя сводка включена. Буду писать в 08:00 по Москве, только если есть события или конфликты."
+                : "Утренняя сводка отключена. Команды /today и /digest продолжат работать."
+              : "Не удалось изменить настройку сводки.";
+          }
+        }
+      } catch {
+        replyText = "Не удалось изменить настройку сводки. Попробуй ещё раз позже.";
+      }
     } else if (command === "trust" || command === "untrust" || command === "trusted") {
       const groupId = `telegram:${chatId}`;
       try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgendaText, buildGroupBriefText, getAgendaItems, getUpcomingItems } from "./briefing";
+import { buildAgendaText, buildGroupBriefText, buildScheduledBriefText, getAgendaItems, getUpcomingItems } from "./briefing";
 import { demoItems } from "./demo-data";
 
 const now = new Date("2026-09-15T08:00:00.000Z");
@@ -23,5 +23,10 @@ describe("briefing", () => {
     expect(buildAgendaText(demoItems, "today", now)).toContain("Лекция отменена");
     expect(buildGroupBriefText(demoItems, now)).toContain("Сначала решить:");
     expect(buildGroupBriefText(demoItems, now)).toContain("Конфликты: 1");
+  });
+
+  it("builds a scheduled brief only when it has useful information", () => {
+    expect(buildScheduledBriefText(demoItems, now)).toContain("Утренняя сводка");
+    expect(buildScheduledBriefText([], now)).toBeNull();
   });
 });

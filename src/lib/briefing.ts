@@ -109,3 +109,29 @@ export function buildGroupBriefText(items: InboxItem[], now = new Date()) {
   }
   return lines.join("\n");
 }
+
+export function buildScheduledBriefText(items: InboxItem[], now = new Date()) {
+  const today = getAgendaItems(items, "today", now);
+  const conflicts = items.filter((item) => item.status === "conflict");
+  if (today.length === 0 && conflicts.length === 0) return null;
+
+  const lines = ["☀️ Утренняя сводка группы", ""];
+  if (today.length) {
+    lines.push(
+      `Сегодня (${today.length}):`,
+      ...today.map(eventLine),
+      "",
+    );
+  } else {
+    lines.push("Сегодня сохранённых событий нет.", "");
+  }
+  if (conflicts.length) {
+    lines.push(
+      `Требуют решения (${conflicts.length}):`,
+      ...conflicts.slice(0, 3).map((item) => `⚠️ ${item.event.title} — ${item.reason}`),
+      "",
+    );
+  }
+  lines.push("/digest — полная сводка · /brief_off — отключить");
+  return lines.join("\n");
+}

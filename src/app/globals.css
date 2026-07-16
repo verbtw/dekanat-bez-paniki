@@ -240,7 +240,12 @@ textarea:focus-visible {
   border: 1px solid #dfe5ef;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
 }
+.sync-card:disabled { cursor: wait; opacity: 0.74; }
+.sync-card:hover { border-color: color-mix(in srgb, var(--cobalt) 35%, var(--line)); }
 .sync-card.error { border-color: #f2c2b9; background: #fff7f5; }
 .sync-card.error .sync-pulse { border-color: #f6c8bf; background: var(--coral); }
 
@@ -601,7 +606,7 @@ textarea:focus-visible {
 .settings-status strong { font-size: 10px; }
 .settings-status small { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.4; }
 .settings-actions { display: flex; gap: 9px; }
-.settings-actions > * { flex: 1; }
+.settings-actions > * { flex: 1; min-width: 0; }
 .calendar-connect { display: grid; grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr); gap: 8px 10px; margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); }
 .calendar-connect-icon { display: grid; grid-row: 1 / 3; place-items: center; align-self: start; width: 36px; height: 36px; border-radius: 11px; background: var(--cobalt-pale); color: var(--cobalt); font-size: 17px; }
 .calendar-connect > div { grid-column: 2 / 4; }

@@ -442,6 +442,7 @@ export function EvidenceDesk() {
   const [storageReady, setStorageReady] = useState(false);
   const [storageMode, setStorageMode] = useState<StorageMode>("checking");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -576,6 +577,29 @@ export function EvidenceDesk() {
   function flash(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(null), 2600);
+  }
+
+  async function retrySync() {
+    if (syncing) return;
+    setSyncing(true);
+    setStorageMode("checking");
+    try {
+      const results = items.length
+        ? await Promise.all(items.map((item) => pushEventToServer(item, workspaceToken)))
+        : [await fetch(workspaceToken
+          ? `/api/events?workspace=${encodeURIComponent(workspaceToken)}`
+          : "/api/events").then((response) => response.ok).catch(() => false)];
+      if (!results.every(Boolean)) throw new Error("PARTIAL_SYNC");
+      setStorageMode("database");
+      setSyncError(null);
+      flash(items.length ? `Синхронизировано карточек: ${items.length}` : "Связь с базой восстановлена");
+    } catch {
+      setStorageMode("local");
+      setSyncError("Не удалось синхронизировать все карточки — локальные данные сохранены");
+      flash("Сервер пока недоступен — попробуем позже");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   function toggleTheme() {
@@ -879,11 +903,19 @@ export function EvidenceDesk() {
           <span className={`theme-switch ${theme}`}><i /></span>
         </button>
 
-        <div className={syncError ? "sync-card error" : "sync-card"}>
+        <button
+          className={syncError ? "sync-card error" : "sync-card"}
+          type="button"
+          onClick={() => void retrySync()}
+          disabled={syncing}
+          aria-label={syncError ? "Повторить синхронизацию" : "Проверить синхронизацию"}
+        >
           <span className="sync-pulse" />
           <div>
             <strong>
-              {syncError
+              {syncing
+                ? "Синхронизирую"
+                : syncError
                 ? "Нужна синхронизация"
                 : storageMode === "database"
                 ? "PostgreSQL подключён"
@@ -892,14 +924,16 @@ export function EvidenceDesk() {
                   : "Локальное хранение"}
             </strong>
             <small>
-              {syncError
+              {syncing
+                ? `отправляю карточек: ${items.length}`
+                : syncError
                 ? syncError
                 : storageMode === "database"
                 ? "события синхронизируются"
                 : "работает без внешних ключей"}
             </small>
           </div>
-        </div>
+        </button>
       </aside>
 
       {activeNav === "inbox" ? (
@@ -1154,6 +1188,7 @@ export function EvidenceDesk() {
               <a href={workspaceToken ? `/api/calendar?workspace=${encodeURIComponent(workspaceToken)}` : "/api/calendar"} download>Скачать .ics</a>
             </div>
             <div className="settings-actions">
+              <button className="secondary-button" type="button" onClick={() => void retrySync()} disabled={syncing}>{syncing ? "Синхронизация…" : "Повторить синхронизацию"}</button>
               <button className="secondary-button" type="button" onClick={() => void copyWorkspaceLink()}>Копировать ссылку</button>
               <a className="primary-button" href="https://t.me/dekanat_panic_test_bot" target="_blank" rel="noreferrer">Открыть бота ↗</a>
             </div>

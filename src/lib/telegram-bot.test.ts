@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { demoItems } from "./demo-data";
 import {
   buildTelegramEventKeyboard,
+  buildTelegramBriefingText,
   buildTelegramConflictsText,
   buildTelegramDuplicateText,
   buildTelegramEventsText,
@@ -15,6 +16,9 @@ describe("Telegram bot commands", () => {
     expect(parseTelegramCommand("/start")).toBe("start");
     expect(parseTelegramCommand("/events@dekanat_panic_test_bot now")).toBe("events");
     expect(parseTelegramCommand("/conflicts")).toBe("conflicts");
+    expect(parseTelegramCommand("/today")).toBe("today");
+    expect(parseTelegramCommand("/week")).toBe("week");
+    expect(parseTelegramCommand("/digest")).toBe("digest");
     expect(parseTelegramCommand("/wat")).toBe("unknown");
     expect(parseTelegramCommand("Перенесли пару")).toBeNull();
   });
@@ -27,7 +31,15 @@ describe("Telegram bot commands", () => {
 
   it("builds useful help and an empty events state", () => {
     expect(buildTelegramHelpText("https://example.com")).toContain("/events");
+    expect(buildTelegramHelpText("https://example.com")).toContain("/digest");
     expect(buildTelegramEventsText([])).toContain("пока нет");
+  });
+
+  it("builds daily, weekly, and group briefings", () => {
+    const now = new Date("2026-09-15T08:00:00.000Z");
+    expect(buildTelegramBriefingText(demoItems, "today", now)).toContain("Лекция отменена");
+    expect(buildTelegramBriefingText(demoItems, "week", now)).toContain("Ближайшие 7 дней");
+    expect(buildTelegramBriefingText(demoItems, "digest", now)).toContain("Сводка группы");
   });
 
   it("formats saved events and limits the list", () => {

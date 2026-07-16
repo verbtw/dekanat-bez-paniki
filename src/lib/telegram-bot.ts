@@ -1,15 +1,17 @@
 import type { InboxItem } from "./types";
 import type { TelegramInlineKeyboardMarkup } from "./telegram";
+import { buildAgendaText, type BriefingPeriod } from "./briefing";
 
-export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "unknown" | null;
+export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "unknown" | null;
+const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest"] as const;
 
 export function parseTelegramCommand(text: string): TelegramBotCommand {
   const token = text.trim().split(/\s+/, 1)[0];
   if (!token.startsWith("/")) return null;
 
   const command = token.slice(1).split("@", 1)[0].toLowerCase();
-  if (command === "start" || command === "help" || command === "status" || command === "events" || command === "conflicts") {
-    return command;
+  if ((supportedCommands as readonly string[]).includes(command)) {
+    return command as (typeof supportedCommands)[number];
   }
   return "unknown";
 }
@@ -23,12 +25,23 @@ export function buildTelegramHelpText(appUrl: string) {
     "",
     "Команды:",
     "/events — последние события этого чата",
+    "/today — что запланировано сегодня",
+    "/week — план на ближайшие 7 дней",
+    "/digest — короткая сводка группы",
     "/conflicts — события, где источники не сходятся",
     "/status — состояние бота и базы",
     "/help — эта подсказка",
     "",
     `Веб-приложение: ${appUrl}`,
   ].join("\n");
+}
+
+export function buildTelegramBriefingText(
+  items: InboxItem[],
+  period: BriefingPeriod,
+  now = new Date(),
+) {
+  return buildAgendaText(items, period, now);
 }
 
 export function buildTelegramStatusText(databaseConfigured: boolean) {

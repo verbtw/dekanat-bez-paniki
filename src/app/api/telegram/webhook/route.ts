@@ -12,6 +12,7 @@ import { extractEvent } from "@/lib/extract-event";
 import {
   buildTelegramEventKeyboard,
   buildTelegramEventText,
+  buildTelegramBriefingText,
   buildTelegramConflictsText,
   buildTelegramDuplicateText,
   buildTelegramEventsText,
@@ -167,9 +168,10 @@ export async function POST(request: NextRequest) {
     } else {
       try {
         const items = await listEvents(`telegram:${chatId}`);
-        replyText = command === "conflicts"
-          ? buildTelegramConflictsText(items)
-          : buildTelegramEventsText(items);
+        if (command === "conflicts") replyText = buildTelegramConflictsText(items);
+        else if (command === "today" || command === "week" || command === "digest") {
+          replyText = buildTelegramBriefingText(items, command);
+        } else replyText = buildTelegramEventsText(items);
       } catch {
         replyText = "Не удалось загрузить события. Попробуй ещё раз чуть позже.";
       }

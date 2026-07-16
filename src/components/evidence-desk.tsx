@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { buildGroupBriefText, getAgendaItems, getUpcomingItems } from "@/lib/briefing";
 import { buildCalendarEvent, calendarFilename } from "@/lib/calendar";
 import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
 import { demoItems } from "@/lib/demo-data";
@@ -9,6 +10,7 @@ import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } 
 
 const navItems = [
   { id: "inbox", icon: "↙", label: "Входящие" },
+  { id: "brief", icon: "☼", label: "Сводка" },
   { id: "radar", icon: "◉", label: "Радар" },
   { id: "events", icon: "□", label: "События" },
   { id: "sources", icon: "⌁", label: "Источники" },
@@ -260,6 +262,86 @@ function SourcesView({ items }: { items: InboxItem[] }) {
   );
 }
 
+function BriefView({
+  items,
+  onOpen,
+  onCopy,
+}: {
+  items: InboxItem[];
+  onOpen: (id: string) => void;
+  onCopy: () => void;
+}) {
+  const upcoming = getUpcomingItems(items);
+  const today = getAgendaItems(items, "today");
+  const next = upcoming[0] ?? null;
+  const conflicts = items.filter((item) => item.status === "conflict");
+  const confirmed = items.filter((item) => item.status === "confirmed").length;
+
+  return (
+    <section className="workspace-view brief-view">
+      <header className="workspace-header">
+        <div>
+          <span className="eyebrow">Оперативная картина</span>
+          <h1>Сводка группы</h1>
+          <p>Короткий ответ на три вопроса: что сегодня, что дальше и где требуется решение.</p>
+        </div>
+        <button className="primary-button" onClick={onCopy}>Копировать сводку ↗</button>
+      </header>
+
+      <div className="brief-hero">
+        <article className="brief-now">
+          <span className="brief-kicker"><i /> Сейчас в фокусе</span>
+          {next ? (
+            <button onClick={() => onOpen(next.id)}>
+              <time>{humanDate(next.event.date)} · {next.event.time}</time>
+              <strong>{next.event.title}</strong>
+              <p>{next.event.subject} · {next.event.room}</p>
+              <span className={`case-badge ${next.status}`}><i /> {statusLabel[next.status]}</span>
+            </button>
+          ) : (
+            <div className="brief-clear"><strong>План свободен</strong><p>Ближайших событий пока нет.</p></div>
+          )}
+        </article>
+
+        <div className="brief-scoreboard">
+          <article><span>Сегодня</span><strong>{today.length}</strong><small>событий в плане</small></article>
+          <article><span>Дальше</span><strong>{upcoming.length}</strong><small>ближайших карточек</small></article>
+          <article className={conflicts.length ? "urgent" : ""}><span>Решить</span><strong>{conflicts.length}</strong><small>активных конфликтов</small></article>
+          <article><span>Готово</span><strong>{confirmed}</strong><small>подтверждено</small></article>
+        </div>
+      </div>
+
+      <div className="brief-grid">
+        <section className="brief-agenda">
+          <div className="calendar-heading"><div><span className="eyebrow">Следующие шаги</span><h2>Ближайшие события</h2></div></div>
+          <div className="brief-timeline">
+            {upcoming.map((item, index) => (
+              <button key={item.id} onClick={() => onOpen(item.id)}>
+                <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
+                <time><strong>{humanDate(item.event.date)}</strong><small>{item.event.time}</small></time>
+                <span><strong>{item.event.title}</strong><small>{item.event.subject} · {item.event.room}</small></span>
+                <i className={`status-dot ${item.status}`} />
+              </button>
+            ))}
+            {upcoming.length === 0 && <div className="empty-state"><span>☼</span><strong>Пока спокойно</strong><p>Новые события появятся в сводке автоматически.</p></div>}
+          </div>
+        </section>
+
+        <aside className="brief-priority">
+          <div className="calendar-heading"><div><span className="eyebrow">Не пропустить</span><h2>Приоритет</h2></div></div>
+          {conflicts.slice(0, 3).map((item) => (
+            <button key={item.id} onClick={() => onOpen(item.id)}>
+              <span>!</span><div><strong>{item.event.title}</strong><small>{item.reason}</small></div><b>→</b>
+            </button>
+          ))}
+          {conflicts.length === 0 && <div className="brief-safe"><span>✓</span><strong>Срочных решений нет</strong><p>Радар не видит противоречий.</p></div>}
+          <footer><span>Telegram-команды</span><code>/today · /week · /digest</code></footer>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 function RadarView({ items, onOpen }: { items: InboxItem[]; onOpen: (id: string) => void }) {
   const conflicts = items.filter((item) => item.status === "conflict");
   const pending = items.filter((item) => item.status === "review");
@@ -480,6 +562,7 @@ export function EvidenceDesk() {
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const navCounts: Record<NavId, number> = {
     inbox: items.length,
+    brief: getUpcomingItems(items).length,
     radar: items.filter((item) => item.status === "conflict").length,
     events: items.length,
     sources: items.reduce((total, item) => total + item.sources.length, 0),
@@ -1015,6 +1098,12 @@ export function EvidenceDesk() {
         </section>
       )}
         </>
+      ) : activeNav === "brief" ? (
+        <BriefView
+          items={items}
+          onOpen={openEvent}
+          onCopy={() => void copyText(buildGroupBriefText(items), "Сводка группы скопирована")}
+        />
       ) : activeNav === "radar" ? (
         <RadarView items={items} onOpen={openEvent} />
       ) : activeNav === "events" ? (

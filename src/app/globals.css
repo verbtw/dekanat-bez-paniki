@@ -1008,6 +1008,56 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 .directory-card footer { grid-column: 2 / 4; display: flex; justify-content: space-between; gap: 10px; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); font-size: 7px; }
 .directory-card footer b { max-width: 45%; overflow: hidden; color: var(--cobalt); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Daily group brief */
+.brief-hero { display: grid; max-width: 1120px; grid-template-columns: minmax(340px, 1.15fr) minmax(390px, 0.95fr); gap: 18px; margin: 30px auto 18px; }
+.brief-now { min-height: 260px; padding: 26px; overflow: hidden; border-radius: 18px; background: linear-gradient(135deg, #2639b4, var(--cobalt) 58%, #6878ec); color: white; box-shadow: 0 18px 38px rgba(64, 84, 214, 0.2); }
+.brief-kicker { display: inline-flex; align-items: center; gap: 7px; font-family: "Geist Mono", monospace; font-size: 8px; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.76; }
+.brief-kicker i { width: 6px; height: 6px; border-radius: 50%; background: #9ef1d4; box-shadow: 0 0 0 4px rgba(158, 241, 212, 0.16); }
+.brief-now > button { display: grid; align-content: end; width: 100%; min-height: 190px; padding: 0; border: 0; background: transparent; color: white; text-align: left; cursor: pointer; }
+.brief-now > button time { font-family: "Geist Mono", monospace; font-size: 9px; opacity: 0.78; }
+.brief-now > button > strong { margin-top: 12px; font-size: clamp(20px, 2.5vw, 31px); line-height: 1.05; letter-spacing: -0.055em; }
+.brief-now > button p { margin: 9px 0 14px; font-size: 10px; opacity: 0.8; }
+.brief-now .case-badge { width: fit-content; background: rgba(255, 255, 255, 0.15); color: white; }
+.brief-clear { display: grid; align-content: center; min-height: 190px; }
+.brief-clear strong { font-size: 26px; letter-spacing: -0.05em; }
+.brief-clear p { opacity: 0.75; }
+.brief-scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.brief-scoreboard article { display: grid; align-content: center; min-height: 125px; padding: 19px; border: 1px solid var(--line); border-radius: 15px; background: var(--white); }
+.brief-scoreboard span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.brief-scoreboard strong { margin-top: 8px; font-family: "Geist Mono", monospace; font-size: 27px; }
+.brief-scoreboard small { margin-top: 6px; color: var(--muted); font-size: 8px; }
+.brief-scoreboard .urgent { border-color: color-mix(in srgb, var(--coral) 32%, var(--line)); background: var(--coral-pale); }
+.brief-scoreboard .urgent strong { color: var(--coral); }
+.brief-grid { display: grid; max-width: 1120px; grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr); gap: 18px; margin: 0 auto; }
+.brief-agenda,
+.brief-priority { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--white); }
+.brief-timeline { padding: 6px 12px 15px; }
+.brief-timeline > button { display: grid; grid-template-columns: 32px 100px minmax(0, 1fr) 10px; align-items: center; gap: 12px; width: 100%; padding: 13px 8px; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; }
+.brief-timeline > button:first-child { border-top: 0; }
+.brief-timeline > button:hover { background: var(--cobalt-pale); }
+.timeline-index { color: var(--cobalt); font-family: "Geist Mono", monospace; font-size: 8px; }
+.brief-timeline time strong,
+.brief-timeline time small,
+.brief-timeline button > span strong,
+.brief-timeline button > span small { display: block; }
+.brief-timeline time strong,
+.brief-timeline button > span strong { font-size: 9px; }
+.brief-timeline time small,
+.brief-timeline button > span small { margin-top: 4px; color: var(--muted); font-size: 7px; }
+.brief-priority > button { display: grid; grid-template-columns: 30px minmax(0, 1fr) 15px; align-items: center; gap: 10px; width: calc(100% - 16px); margin: 8px; padding: 12px; border: 0; border-radius: 11px; background: var(--coral-pale); text-align: left; cursor: pointer; }
+.brief-priority > button > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--white); color: var(--coral); font-family: "Geist Mono", monospace; font-weight: 800; }
+.brief-priority button strong,
+.brief-priority button small { display: block; }
+.brief-priority button strong { font-size: 9px; }
+.brief-priority button small { margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.brief-priority button b { color: var(--coral); }
+.brief-priority > footer { display: grid; gap: 6px; margin: 12px 18px 18px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 7px; }
+.brief-priority > footer code { color: var(--cobalt); font-family: "Geist Mono", monospace; font-size: 8px; }
+.brief-safe { display: grid; place-items: center; padding: 28px 18px; text-align: center; }
+.brief-safe > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--mint-pale); color: var(--mint); }
+.brief-safe strong { margin-top: 10px; font-size: 10px; }
+.brief-safe p { margin: 5px 0 0; color: var(--muted); font-size: 8px; }
+
 /* Midnight institutional theme */
 [data-theme="dark"] {
   --ink: #f2f4ff;
@@ -1070,6 +1120,7 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 [data-theme="dark"] .trust-level { background: rgba(13, 20, 37, 0.72); }
 [data-theme="dark"] .radar-scope { background: radial-gradient(circle at 50% 45%, #202a50, #121a2c 68%); }
 [data-theme="dark"] .radar-orbit > div { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28); }
+[data-theme="dark"] .brief-now { background: linear-gradient(135deg, #283aa9, #5265df); box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24); }
 
 @media (max-width: 1050px) {
   .theme-toggle { display: grid; grid-template-columns: 1fr; place-items: center; padding: 9px; }
@@ -1080,7 +1131,9 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 @media (max-width: 900px) {
   .trust-strip { grid-template-columns: 1fr; }
   .radar-dashboard,
-  .radar-columns { grid-template-columns: 1fr; }
+  .radar-columns,
+  .brief-hero,
+  .brief-grid { grid-template-columns: 1fr; }
   .source-grid { grid-template-columns: 1fr; }
   .event-row { grid-template-columns: 55px 3px 1fr 70px 24px; }
   .event-row .case-badge { display: none; }
@@ -1104,6 +1157,8 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
   .radar-metrics article:last-child { grid-column: auto; }
   .radar-scope { min-height: 280px; }
   .radar-orbit { width: 205px; height: 205px; }
+  .brief-scoreboard { grid-template-columns: 1fr 1fr; }
+  .brief-timeline > button { grid-template-columns: 26px 86px minmax(0, 1fr) 8px; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -20,6 +20,7 @@ import {
   buildTelegramDuplicateText,
   buildTelegramEventsText,
   buildTelegramHelpText,
+  buildTelegramListKeyboard,
   buildTelegramStatusText,
   buildTelegramTrustedText,
   buildWorkspaceEventUrl,
@@ -188,6 +189,7 @@ export async function POST(request: NextRequest) {
   const command = parseTelegramCommand(text);
   if (command) {
     let replyText: string;
+    let replyMarkup: ReturnType<typeof buildTelegramListKeyboard> | undefined;
     if (command === "start" || command === "help" || command === "unknown") {
       replyText = buildTelegramHelpText(appUrl);
     } else if (command === "status") {
@@ -263,11 +265,22 @@ export async function POST(request: NextRequest) {
       }
     } else {
       try {
-        const items = await listEvents(`telegram:${chatId}`);
-        if (command === "conflicts") replyText = buildTelegramConflictsText(items);
+        const groupId = `telegram:${chatId}`;
+        const [items, group] = await Promise.all([
+          listEvents(groupId),
+          findGroupById(groupId),
+        ]);
+        if (command === "conflicts") {
+          const conflicts = items.filter((item) => item.status === "conflict");
+          replyText = buildTelegramConflictsText(items);
+          if (conflicts.length) replyMarkup = buildTelegramListKeyboard(conflicts, appUrl, group?.accessToken);
+        }
         else if (command === "today" || command === "week" || command === "digest") {
           replyText = buildTelegramBriefingText(items, command);
-        } else replyText = buildTelegramEventsText(items);
+        } else {
+          replyText = buildTelegramEventsText(items);
+          if (items.length) replyMarkup = buildTelegramListKeyboard(items, appUrl, group?.accessToken);
+        }
       } catch {
         replyText = "Не удалось загрузить события. Попробуй ещё раз чуть позже.";
       }
@@ -275,6 +288,7 @@ export async function POST(request: NextRequest) {
 
     const reply = await sendTelegramMessage(String(chatId), replyText, {
       replyToMessageId: messageId,
+      replyMarkup,
     });
     return NextResponse.json({ ok: true, command, replySent: reply.sent });
   }

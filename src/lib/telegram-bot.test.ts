@@ -7,6 +7,7 @@ import {
   buildTelegramDuplicateText,
   buildTelegramEventsText,
   buildTelegramHelpText,
+  buildTelegramListKeyboard,
   buildTelegramTrustedText,
   buildWorkspaceEventUrl,
   getTelegramMessagePayload,
@@ -82,6 +83,14 @@ describe("Telegram bot commands", () => {
     expect(keyboard.inline_keyboard).toEqual([
       [{ text: "🌐 Открыть приложение", url: "https://example.com" }],
     ]);
+  });
+
+  it("builds deep-link rows for event lists", () => {
+    const keyboard = buildTelegramListKeyboard(demoItems, "https://example.com", "workspace-token");
+    expect(keyboard.inline_keyboard).toHaveLength(4);
+    expect(keyboard.inline_keyboard[0][0].url).toContain("event=evt-1042");
+    expect(keyboard.inline_keyboard[0][0].url).toContain("workspace=workspace-token");
+    expect(keyboard.inline_keyboard[3][0].text).toBe("🌐 Открыть всё");
   });
 
   it("builds an exact workspace deep link without losing existing parameters", () => {

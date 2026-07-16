@@ -183,6 +183,22 @@ export function buildTelegramEventKeyboard(
   return { inline_keyboard: rows };
 }
 
+export function buildTelegramListKeyboard(
+  items: InboxItem[],
+  appUrl: string,
+  accessToken?: string | null,
+): TelegramInlineKeyboardMarkup {
+  const rows = items.slice(0, 5).map((item) => [{
+    text: `${item.status === "conflict" ? "⚠️" : item.status === "confirmed" ? "✅" : "🟡"} ${item.event.title}`.slice(0, 60),
+    url: buildWorkspaceEventUrl(appUrl, accessToken, item.id),
+  }]);
+  rows.push([{
+    text: "🌐 Открыть всё",
+    url: buildWorkspaceEventUrl(appUrl, accessToken),
+  }]);
+  return { inline_keyboard: rows };
+}
+
 export function parseConfirmCallback(data: string | undefined) {
   if (!data?.startsWith("confirm:")) return null;
   const eventId = data.slice("confirm:".length);

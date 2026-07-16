@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
       mode: "local",
       items: demoItems,
       workspace: { name: "ИВТ-101 · демо" },
+    }, {
+      headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" },
     });
   }
   if (!isDatabaseConfigured()) {
@@ -36,6 +38,11 @@ export async function GET(request: NextRequest) {
       mode: "database",
       items,
       workspace: { name: group.name },
+    }, {
+      headers: {
+        "cache-control": "private, no-store",
+        "x-robots-tag": "noindex, nofollow",
+      },
     });
   } catch {
     return NextResponse.json(

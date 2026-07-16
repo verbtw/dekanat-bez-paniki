@@ -8,6 +8,7 @@ import {
   buildTelegramEventsText,
   buildTelegramHelpText,
   buildTelegramTrustedText,
+  buildWorkspaceEventUrl,
   getTelegramMessagePayload,
   parseConfirmCallback,
   parseTelegramCommand,
@@ -74,5 +75,16 @@ describe("Telegram bot commands", () => {
     expect(keyboard.inline_keyboard[0][0].callback_data).toBe("confirm:tg:-100123:42");
     expect(parseConfirmCallback("confirm:tg:-100123:42")).toBe("tg:-100123:42");
     expect(parseConfirmCallback("other:42")).toBeNull();
+  });
+
+  it("builds an exact workspace deep link without losing existing parameters", () => {
+    const url = new URL(buildWorkspaceEventUrl(
+      "https://example.com/app?from=telegram",
+      "secret workspace",
+      "tg:-100123:42",
+    ));
+    expect(url.searchParams.get("from")).toBe("telegram");
+    expect(url.searchParams.get("workspace")).toBe("secret workspace");
+    expect(url.searchParams.get("event")).toBe("tg:-100123:42");
   });
 });

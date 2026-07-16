@@ -442,6 +442,7 @@ export function EvidenceDesk() {
   const [toast, setToast] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
   const [workspaceToken, setWorkspaceToken] = useState("");
+  const [requestedEventId, setRequestedEventId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("ИВТ-101 · демо");
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -454,7 +455,9 @@ export function EvidenceDesk() {
     const frame = window.requestAnimationFrame(() => {
       const currentTheme = document.documentElement.dataset.theme;
       setTheme(currentTheme === "dark" ? "dark" : "light");
-      setWorkspaceToken(new URLSearchParams(window.location.search).get("workspace")?.trim() || "");
+      const params = new URLSearchParams(window.location.search);
+      setWorkspaceToken(params.get("workspace")?.trim() || "");
+      setRequestedEventId(params.get("event")?.trim() || "");
       setWorkspaceReady(true);
     });
 
@@ -570,7 +573,10 @@ export function EvidenceDesk() {
     );
   }, [filter, items, query]);
 
-  const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
+  const selected = items.find((item) => item.id === requestedEventId)
+    ?? items.find((item) => item.id === selectedId)
+    ?? items[0]
+    ?? null;
   const navCounts: Record<NavId, number> = {
     inbox: items.length,
     brief: getUpcomingItems(items).length,
@@ -631,9 +637,23 @@ export function EvidenceDesk() {
     setTheme(nextTheme);
   }
 
-  function openEvent(id: string) {
+  function buildAppUrl(eventId?: string, includeWorkspace = true) {
+    const url = new URL(window.location.origin + window.location.pathname);
+    if (includeWorkspace && workspaceToken) url.searchParams.set("workspace", workspaceToken);
+    if (eventId) url.searchParams.set("event", eventId);
+    return url.toString();
+  }
+
+  function selectEvent(id: string, updateUrl = true) {
     setSelectedId(id);
+    setRequestedEventId(id);
     setActiveNav("inbox");
+    setActionMenuOpen(false);
+    if (updateUrl) window.history.replaceState(null, "", buildAppUrl(id));
+  }
+
+  function openEvent(id: string) {
+    selectEvent(id);
   }
 
   function updateStatus(status: ReviewStatus) {
@@ -680,14 +700,14 @@ export function EvidenceDesk() {
     const text = eventSummary(selected);
     if (navigator.share) {
       try {
-        await navigator.share({ title: selected.event.title, text, url: window.location.href });
+        await navigator.share({ title: selected.event.title, text, url: buildAppUrl(selected.id) });
         flash("Карточка отправлена");
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
       }
     }
-    await copyText(`${text}\n${window.location.href}`, "Карточка скопирована");
+    await copyText(`${text}\n${buildAppUrl(selected.id)}`, "Карточка скопирована");
   }
 
   function addSimilarMessage() {
@@ -698,7 +718,7 @@ export function EvidenceDesk() {
   }
 
   async function copyWorkspaceLink() {
-    await copyText(window.location.href, "Ссылка на рабочее пространство скопирована");
+    await copyText(buildAppUrl(undefined, true), "Ссылка на рабочее пространство скопирована");
   }
 
   function calendarFeedUrl() {
@@ -779,7 +799,14 @@ export function EvidenceDesk() {
   function confirmDeleteEvent() {
     if (!selected) return;
     const deletingId = selected.id;
-    setItems((current) => current.filter((item) => item.id !== deletingId));
+    const remaining = items.filter((item) => item.id !== deletingId);
+    setItems(remaining);
+    if (remaining[0]) selectEvent(remaining[0].id);
+    else {
+      setSelectedId("");
+      setRequestedEventId("");
+      window.history.replaceState(null, "", buildAppUrl());
+    }
     setDeleteOpen(false);
     setActionMenuOpen(false);
     void deleteEventFromServer(deletingId, workspaceToken).then((synced) => {
@@ -837,10 +864,10 @@ export function EvidenceDesk() {
             }
           : existing,
       ));
-      setSelectedId(assessment.matchedId);
+      selectEvent(assessment.matchedId);
     } else {
       setItems((current) => [assessedItem, ...current]);
-      setSelectedId(id);
+      selectEvent(id);
     }
     setNewMessage("");
     setComposerOpen(false);
@@ -977,8 +1004,7 @@ export function EvidenceDesk() {
             <button
               key={item.id}
               onClick={() => {
-                setSelectedId(item.id);
-                setActionMenuOpen(false);
+                selectEvent(item.id);
               }}
               className={selected?.id === item.id ? `inbox-item selected ${item.status}` : `inbox-item ${item.status}`}
             >

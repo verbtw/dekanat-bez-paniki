@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "Деканат без паники — сообщения, которым можно доверять",
   description:
     "Превращает сообщения и подписи к файлам из учебных чатов в проверенные события.",
+  referrer: "no-referrer",
 };
 
 const themeBootstrap = `

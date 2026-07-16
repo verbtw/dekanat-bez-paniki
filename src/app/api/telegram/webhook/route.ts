@@ -22,6 +22,7 @@ import {
   buildTelegramHelpText,
   buildTelegramStatusText,
   buildTelegramTrustedText,
+  buildWorkspaceEventUrl,
   getTelegramMessagePayload,
   parseConfirmCallback,
   parseTelegramCommand,
@@ -148,9 +149,7 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.APP_URL?.trim() || "https://dekanat-bez-paniki.vercel.app";
     const group = await findGroupById(groupId).catch(() => null);
-    const workspaceUrl = group
-      ? `${appUrl}?workspace=${encodeURIComponent(group.accessToken)}`
-      : appUrl;
+    const workspaceUrl = buildWorkspaceEventUrl(appUrl, group?.accessToken, eventId);
     await Promise.all([
       answerTelegramCallback(callbackId, "Событие подтверждено ✅"),
       editTelegramMessageKeyboard(String(chatId), botMessageId, {
@@ -333,7 +332,7 @@ export async function POST(request: NextRequest) {
       replyMarkup: buildTelegramEventKeyboard(
         storedItem,
         stored,
-        workspaceToken ? `${appUrl}?workspace=${encodeURIComponent(workspaceToken)}` : appUrl,
+        buildWorkspaceEventUrl(appUrl, workspaceToken, storedItem.id),
       ),
     },
   );

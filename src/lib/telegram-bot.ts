@@ -5,6 +5,17 @@ import { buildAgendaText, type BriefingPeriod } from "./briefing";
 export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "trust" | "untrust" | "trusted" | "brief_on" | "brief_off" | "unknown" | null;
 const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest", "trust", "untrust", "trusted", "brief_on", "brief_off"] as const;
 
+export function buildWorkspaceEventUrl(
+  appUrl: string,
+  accessToken?: string | null,
+  eventId?: string | null,
+) {
+  const url = new URL(appUrl);
+  if (accessToken) url.searchParams.set("workspace", accessToken);
+  if (eventId) url.searchParams.set("event", eventId);
+  return url.toString();
+}
+
 export function getTelegramMessagePayload(message: {
   text?: string;
   caption?: string;

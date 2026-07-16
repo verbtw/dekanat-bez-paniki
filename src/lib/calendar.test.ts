@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { demoItems } from "./demo-data";
-import { buildCalendarEvent, calendarFilename } from "./calendar";
+import { buildCalendarEvent, buildGroupCalendar, calendarFilename } from "./calendar";
 
 describe("calendar export", () => {
   it("builds a portable one-hour ICS event", () => {
@@ -22,5 +22,13 @@ describe("calendar export", () => {
       event: { ...demoItems[0].event, date: "Дата не найдена" },
     };
     expect(buildCalendarEvent(item)).toBeNull();
+  });
+
+  it("publishes only confirmed events in the group calendar", () => {
+    const calendar = buildGroupCalendar(demoItems, "ИВТ-101", new Date("2026-07-16T10:00:00Z"));
+    expect(calendar).toContain("X-WR-CALNAME:ИВТ-101");
+    expect(calendar).toContain("Лекция отменена");
+    expect(calendar).not.toContain("Лабораторная №2 перенесена");
+    expect(calendar).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT15M");
   });
 });

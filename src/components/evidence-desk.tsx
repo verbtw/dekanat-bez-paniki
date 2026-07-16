@@ -154,10 +154,12 @@ function EventsView({
   items,
   onOpen,
   onAdd,
+  onCalendar,
 }: {
   items: InboxItem[];
   onOpen: (id: string) => void;
   onAdd: () => void;
+  onCalendar: () => void;
 }) {
   const datedItems = [...items].sort((left, right) =>
     left.event.date.localeCompare(right.event.date),
@@ -177,7 +179,10 @@ function EventsView({
           <h1>События</h1>
           <p>Все подтверждённые и ожидающие проверки изменения в одном месте.</p>
         </div>
-        <button className="primary-button" onClick={onAdd}>＋ Добавить сообщение</button>
+        <div className="workspace-header-actions">
+          <button className="secondary-button" onClick={onCalendar}>⌁ Подключить календарь</button>
+          <button className="primary-button" onClick={onAdd}>＋ Добавить сообщение</button>
+        </div>
       </header>
 
       <div className="workspace-stats">
@@ -656,6 +661,16 @@ export function EvidenceDesk() {
     await copyText(window.location.href, "Ссылка на рабочее пространство скопирована");
   }
 
+  function calendarFeedUrl() {
+    const url = new URL("/api/calendar", window.location.origin);
+    if (workspaceToken) url.searchParams.set("workspace", workspaceToken);
+    return url.toString();
+  }
+
+  async function copyCalendarFeed() {
+    await copyText(calendarFeedUrl(), "Ссылка календаря скопирована");
+  }
+
   function openEditor() {
     if (!selected) return;
     setEditDraft({
@@ -1111,6 +1126,7 @@ export function EvidenceDesk() {
           items={items}
           onOpen={openEvent}
           onAdd={() => setComposerOpen(true)}
+          onCalendar={() => setSettingsOpen(true)}
         />
       ) : (
         <SourcesView items={items} />
@@ -1131,6 +1147,12 @@ export function EvidenceDesk() {
               <div><strong>{storageMode === "database" ? "Синхронизация включена" : "Локальный режим"}</strong><small>{syncError || "События сохраняются в PostgreSQL и на этом устройстве"}</small></div>
             </div>
             <p>{workspaceToken ? "Эта ссылка даёт доступ к событиям Telegram-группы. Передавай её только участникам группы." : "Сейчас открыто публичное демо. Персональная рабочая ссылка появится после сообщения Telegram-боту."}</p>
+            <div className="calendar-connect">
+              <span className="calendar-connect-icon">□</span>
+              <div><strong>Живой календарь группы</strong><small>Только подтверждённые события. Google, Apple и Outlook проверяют эту ленту автоматически.</small></div>
+              <button type="button" onClick={() => void copyCalendarFeed()}>Копировать URL</button>
+              <a href={workspaceToken ? `/api/calendar?workspace=${encodeURIComponent(workspaceToken)}` : "/api/calendar"} download>Скачать .ics</a>
+            </div>
             <div className="settings-actions">
               <button className="secondary-button" type="button" onClick={() => void copyWorkspaceLink()}>Копировать ссылку</button>
               <a className="primary-button" href="https://t.me/dekanat_panic_test_bot" target="_blank" rel="noreferrer">Открыть бота ↗</a>

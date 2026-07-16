@@ -17,7 +17,7 @@ function formatLocal(date: Date) {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}T${pad(date.getHours())}${pad(date.getMinutes())}00`;
 }
 
-export function buildCalendarEvent(item: InboxItem, now = new Date()) {
+function buildEventLines(item: InboxItem, now: Date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(item.event.date) || !/^\d{2}:\d{2}$/.test(item.event.time)) {
     return null;
   }
@@ -30,10 +30,6 @@ export function buildCalendarEvent(item: InboxItem, now = new Date()) {
   ].filter(Boolean).join("\n\n");
 
   return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Деканат без паники//RU",
-    "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
     `UID:${escapeIcs(item.id)}@dekanat-bez-paniki`,
     `DTSTAMP:${formatUtc(now)}`,
@@ -42,7 +38,44 @@ export function buildCalendarEvent(item: InboxItem, now = new Date()) {
     `SUMMARY:${escapeIcs(item.event.title)}`,
     `LOCATION:${escapeIcs(item.event.room)}`,
     `DESCRIPTION:${escapeIcs(description)}`,
+    `STATUS:${item.status === "confirmed" ? "CONFIRMED" : "TENTATIVE"}`,
+    `SEQUENCE:${Math.max((item.activity?.length ?? 0) + item.sources.length - 1, 0)}`,
+    "TRANSP:OPAQUE",
     "END:VEVENT",
+  ];
+}
+
+export function buildCalendarEvent(item: InboxItem, now = new Date()) {
+  const eventLines = buildEventLines(item, now);
+  if (!eventLines) return null;
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Деканат без паники//RU",
+    "CALSCALE:GREGORIAN",
+    ...eventLines,
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
+}
+
+export function buildGroupCalendar(items: InboxItem[], calendarName: string, now = new Date()) {
+  const events = items
+    .filter((item) => item.status === "confirmed")
+    .map((item) => buildEventLines(item, now))
+    .filter((lines): lines is string[] => Boolean(lines));
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Деканат без паники//RU",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeIcs(calendarName)}`,
+    "REFRESH-INTERVAL;VALUE=DURATION:PT15M",
+    "X-PUBLISHED-TTL:PT15M",
+    ...events.flat(),
     "END:VCALENDAR",
     "",
   ].join("\r\n");

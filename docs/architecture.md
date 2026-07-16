@@ -3,19 +3,24 @@
 ## Поток данных
 
 ```text
-Telegram update
-    ↓ secret header validation
-/api/telegram/webhook
-    ↓ deterministic extraction
-InboxItem + EvidenceSource
-    ↓
-PostgreSQL (groups → events → sources)
-    ↓
-/api/events
-    ↓ merge by event id
-browser localStorage
-    ↓
-human review UI
+Telegram update ── secret header ──▶ /api/telegram/webhook
+      │                                  │
+      │ attachment caption               ├─ Telegram admin verification
+      │                                  ├─ deterministic extraction
+      │                                  ├─ duplicate/conflict detector
+      │                                  └─ inline confirmation
+      ▼
+InboxItem + EvidenceSource ─────────▶ Neon PostgreSQL
+                                          │
+                    ┌─────────────────────┼──────────────────────┐
+                    ▼                     ▼                      ▼
+              /api/events          /api/calendar        /api/cron/daily-brief
+                    │               confirmed only       opt-in + bearer secret
+                    ▼                     │                      │
+         React review workspace           ▼                      ▼
+                    │              Google/Apple/Outlook     Telegram digest
+                    ▼
+          versioned localStorage
 ```
 
 ## Почему local-first
@@ -29,11 +34,27 @@ human review UI
 - Все публичные payload проходят Zod-валидацию.
 - Подключение к базе создаётся лениво внутри запроса, поэтому секреты не требуются во время `next build`.
 - Уверенность парсера не является разрешением на публикацию: сомнительные события проходят human review.
+- Команды `/trust`, `/untrust`, `/brief_on` и `/brief_off` в группах требуют отдельного подтверждения административных прав через Telegram Bot API. При сетевой ошибке доступ не выдаётся.
+- Cron endpoint требует `Authorization: Bearer CRON_SECRET`; пустые группы и группы без opt-in не получают сообщений.
+- Календарная лента скрыта от индексации и публикует только события со статусом `confirmed`.
+
+## Модель данных
+
+- `groups` изолирует Telegram-чаты непрозрачным access token, хранит доверенные username и opt-in сводки;
+- `events` содержит текущую проверяемую версию факта;
+- `sources` сохраняет исходный текст, автора, роль и тип вложения;
+- `event_activities` образует неизменяемый журнал создания, правок, статусов и добавленных источников.
+
+## Разрешение дублей и конфликтов
+
+Новый факт сначала сравнивается с событиями своей группы. Совпадающие предмет, заголовок и поля объединяются в одну карточку, а новое сообщение становится дополнительным источником. Если сущность похожа, но дата, время или аудитория отличаются, создаётся отдельный конфликт с перечнем расходящихся полей. Граница всегда ограничена `groupId`, поэтому источники разных чатов не смешиваются.
 
 ## Идемпотентность
 
 Telegram-события получают стабильный идентификатор `tg:<chatId>:<messageId>`. Повторная доставка одного update обновляет событие, но не создаёт дубликат источника. Это важно, потому что Telegram повторяет webhook-запросы после неуспешного HTTP-ответа.
 
-## Следующее изменение
+## Фоновые процессы
 
-Фоновые задачи отделят быстрый ответ webhook от OCR, транскрибации и LLM-анализа. Webhook сохранит исходное сообщение и вернёт `2xx`, а worker достроит событие и уведомит клиента через real-time канал.
+Vercel Cron запускает утреннюю сводку один раз в день в 05:00 UTC (08:00 МСК). Подписка выключена по умолчанию. Каждый запуск заново читает актуальные события и отправляет сообщение только при наличии сегодняшнего плана или активных конфликтов.
+
+Следующий масштабируемый шаг — вынести OCR, транскрибацию и тяжёлый анализ из быстрого webhook в очередь задач, сохраняя исходное сообщение до асинхронной обработки.

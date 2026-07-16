@@ -63,6 +63,7 @@
 - защищённая заготовка `POST /api/telegram/webhook`;
 - адаптивная версия для мобильных устройств;
 - тесты критичных сценариев парсинга.
+- единая проверка `npm run check`: ESLint, Vitest и production-сборка.
 
 ## Быстрый запуск
 
@@ -83,6 +84,8 @@ npm run dev
 npm run lint
 npm run test
 npm run build
+# или всё сразу
+npm run check
 ```
 
 ## Telegram

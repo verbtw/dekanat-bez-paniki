@@ -8,6 +8,7 @@ import {
   buildTelegramEventsText,
   buildTelegramHelpText,
   buildTelegramTrustedText,
+  getTelegramMessagePayload,
   parseConfirmCallback,
   parseTelegramCommand,
   parseTrustedUsername,
@@ -33,6 +34,13 @@ describe("Telegram bot commands", () => {
     expect(parseTrustedUsername("/trust no")).toBeNull();
     expect(buildTelegramTrustedText(["maria_teacher"])).toContain("@maria_teacher");
     expect(buildTelegramTrustedText([])).toContain("пока нет");
+  });
+
+  it("keeps attachment captions and source kinds", () => {
+    expect(getTelegramMessagePayload({ photo: [{}], caption: "  Перенос на 18.09  " }))
+      .toEqual({ text: "Перенос на 18.09", kind: "image", attachmentLabel: "фотографии" });
+    expect(getTelegramMessagePayload({ document: {}, caption: "Расписание" }).kind).toBe("document");
+    expect(getTelegramMessagePayload({ voice: {} }).attachmentLabel).toBe("голосовому сообщению");
   });
 
   it("formats the conflict queue and duplicate response", () => {

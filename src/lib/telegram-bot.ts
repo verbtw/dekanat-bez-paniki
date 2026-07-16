@@ -1,9 +1,32 @@
-import type { InboxItem } from "./types";
+import type { InboxItem, SourceKind } from "./types";
 import type { TelegramInlineKeyboardMarkup } from "./telegram";
 import { buildAgendaText, type BriefingPeriod } from "./briefing";
 
 export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "trust" | "untrust" | "trusted" | "brief_on" | "brief_off" | "unknown" | null;
 const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest", "trust", "untrust", "trusted", "brief_on", "brief_off"] as const;
+
+export function getTelegramMessagePayload(message: {
+  text?: string;
+  caption?: string;
+  photo?: Array<unknown>;
+  voice?: unknown;
+  document?: unknown;
+}) {
+  const text = (message.text || message.caption)?.trim() || "";
+  let kind: SourceKind = "message";
+  let attachmentLabel: string | null = null;
+  if (message.voice) {
+    kind = "voice";
+    attachmentLabel = "голосовому сообщению";
+  } else if (message.document) {
+    kind = "document";
+    attachmentLabel = "документу";
+  } else if (message.photo?.length) {
+    kind = "image";
+    attachmentLabel = "фотографии";
+  }
+  return { text, kind, attachmentLabel };
+}
 
 export function parseTelegramCommand(text: string): TelegramBotCommand {
   const token = text.trim().split(/\s+/, 1)[0];

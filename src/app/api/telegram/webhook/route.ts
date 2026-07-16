@@ -22,6 +22,7 @@ import {
   buildTelegramHelpText,
   buildTelegramStatusText,
   buildTelegramTrustedText,
+  getTelegramMessagePayload,
   parseConfirmCallback,
   parseTelegramCommand,
   parseTrustedUsername,
@@ -40,6 +41,10 @@ type TelegramUpdate = {
     message_id?: number;
     date?: number;
     text?: string;
+    caption?: string;
+    photo?: Array<{ file_id?: string }>;
+    voice?: { file_id?: string; duration?: number };
+    document?: { file_id?: string; file_name?: string };
     chat?: { id?: number; title?: string; type?: string };
     from?: { id?: number; first_name?: string; last_name?: string; username?: string };
   };
@@ -53,7 +58,12 @@ type TelegramUpdate = {
   };
 };
 
-function buildInboxItem(update: TelegramUpdate, text: string, role: SourceRole): InboxItem | null {
+function buildInboxItem(
+  update: TelegramUpdate,
+  text: string,
+  role: SourceRole,
+  kind: InboxItem["sources"][number]["kind"],
+): InboxItem | null {
   const message = update.message;
   const chatId = message?.chat?.id;
   const messageId = message?.message_id;
@@ -85,7 +95,7 @@ function buildInboxItem(update: TelegramUpdate, text: string, role: SourceRole):
         id: `tg-source:${chatId}:${messageId}`,
         author,
         role,
-        kind: "message",
+        kind,
         text,
         time: new Intl.DateTimeFormat("ru-RU", {
           hour: "2-digit",
@@ -150,8 +160,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, callback: "confirmed", eventId });
   }
 
-  const text = update?.message?.text?.trim();
+  const payload = getTelegramMessagePayload(update.message ?? {});
+  const text = payload.text;
   if (!text) {
+    const attachment = payload.attachmentLabel;
+    if (attachment && update.message?.chat?.id !== undefined) {
+      const reply = await sendTelegramMessage(
+        String(update.message.chat.id),
+        `📝 Добавь подпись к ${attachment}: что произошло, дата, время и аудитория. Тогда я сохраню файл как источник события.`,
+        { replyToMessageId: update.message.message_id },
+      );
+      return NextResponse.json({ ok: true, skipped: "attachment-without-caption", replySent: reply.sent });
+    }
     return NextResponse.json({ ok: true, skipped: "unsupported-message" });
   }
 
@@ -269,7 +289,7 @@ export async function POST(request: NextRequest) {
       : access.role;
   }
 
-  const item = buildInboxItem(update, text, sourceRole);
+  const item = buildInboxItem(update, text, sourceRole, payload.kind);
   if (!item) {
     return NextResponse.json({ ok: true, skipped: "missing-identifiers" });
   }

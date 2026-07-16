@@ -21,6 +21,7 @@ export const groups = pgTable("groups", {
     .notNull()
     .unique()
     .default(sql`gen_random_uuid()::text`),
+  trustedUsernames: jsonb("trusted_usernames").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

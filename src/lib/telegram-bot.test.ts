@@ -7,8 +7,10 @@ import {
   buildTelegramDuplicateText,
   buildTelegramEventsText,
   buildTelegramHelpText,
+  buildTelegramTrustedText,
   parseConfirmCallback,
   parseTelegramCommand,
+  parseTrustedUsername,
 } from "./telegram-bot";
 
 describe("Telegram bot commands", () => {
@@ -19,8 +21,17 @@ describe("Telegram bot commands", () => {
     expect(parseTelegramCommand("/today")).toBe("today");
     expect(parseTelegramCommand("/week")).toBe("week");
     expect(parseTelegramCommand("/digest")).toBe("digest");
+    expect(parseTelegramCommand("/trust @teacher")).toBe("trust");
+    expect(parseTelegramCommand("/trusted")).toBe("trusted");
     expect(parseTelegramCommand("/wat")).toBe("unknown");
     expect(parseTelegramCommand("Перенесли пару")).toBeNull();
+  });
+
+  it("validates trusted Telegram usernames", () => {
+    expect(parseTrustedUsername("/trust @Maria_Teacher")).toBe("maria_teacher");
+    expect(parseTrustedUsername("/trust no")).toBeNull();
+    expect(buildTelegramTrustedText(["maria_teacher"])).toContain("@maria_teacher");
+    expect(buildTelegramTrustedText([])).toContain("пока нет");
   });
 
   it("formats the conflict queue and duplicate response", () => {

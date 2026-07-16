@@ -71,7 +71,7 @@ export async function ensureGroup(input: {
         updatedAt: new Date(),
       },
     })
-    .returning({ id: groups.id, name: groups.name, accessToken: groups.accessToken });
+    .returning({ id: groups.id, name: groups.name, accessToken: groups.accessToken, trustedUsernames: groups.trustedUsernames });
   if (!group) throw new Error("GROUP_UPSERT_FAILED");
   return group;
 }
@@ -79,7 +79,7 @@ export async function ensureGroup(input: {
 export async function findGroupByAccessToken(accessToken: string) {
   const db = getDb();
   const [group] = await db
-    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken })
+    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken, trustedUsernames: groups.trustedUsernames })
     .from(groups)
     .where(eq(groups.accessToken, accessToken))
     .limit(1);
@@ -89,11 +89,37 @@ export async function findGroupByAccessToken(accessToken: string) {
 export async function findGroupById(id: string) {
   const db = getDb();
   const [group] = await db
-    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken })
+    .select({ id: groups.id, name: groups.name, accessToken: groups.accessToken, trustedUsernames: groups.trustedUsernames })
     .from(groups)
     .where(eq(groups.id, id))
     .limit(1);
   return group ?? null;
+}
+
+export async function setGroupTrustedUsername(
+  groupId: string,
+  username: string,
+  trusted: boolean,
+) {
+  const db = getDb();
+  const normalized = username.replace(/^@/, "").trim().toLowerCase();
+  const [current] = await db
+    .select({ trustedUsernames: groups.trustedUsernames })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .limit(1);
+  if (!current) return null;
+
+  const existing = current.trustedUsernames ?? [];
+  const next = trusted
+    ? Array.from(new Set([...existing, normalized])).sort()
+    : existing.filter((value) => value !== normalized);
+  const [updated] = await db
+    .update(groups)
+    .set({ trustedUsernames: next, updatedAt: new Date() })
+    .where(eq(groups.id, groupId))
+    .returning({ trustedUsernames: groups.trustedUsernames });
+  return updated ?? null;
 }
 
 export async function listEvents(groupId = demoGroupId): Promise<InboxItem[]> {

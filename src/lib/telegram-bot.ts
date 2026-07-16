@@ -2,8 +2,8 @@ import type { InboxItem } from "./types";
 import type { TelegramInlineKeyboardMarkup } from "./telegram";
 import { buildAgendaText, type BriefingPeriod } from "./briefing";
 
-export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "unknown" | null;
-const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest"] as const;
+export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "today" | "week" | "digest" | "trust" | "untrust" | "trusted" | "unknown" | null;
+const supportedCommands = ["start", "help", "status", "events", "conflicts", "today", "week", "digest", "trust", "untrust", "trusted"] as const;
 
 export function parseTelegramCommand(text: string): TelegramBotCommand {
   const token = text.trim().split(/\s+/, 1)[0];
@@ -29,10 +29,31 @@ export function buildTelegramHelpText(appUrl: string) {
     "/week — план на ближайшие 7 дней",
     "/digest — короткая сводка группы",
     "/conflicts — события, где источники не сходятся",
+    "/trusted — доверенные преподаватели",
+    "/trust @username — назначить преподавателя (только админ)",
+    "/untrust @username — снять роль (только админ)",
     "/status — состояние бота и базы",
     "/help — эта подсказка",
     "",
     `Веб-приложение: ${appUrl}`,
+  ].join("\n");
+}
+
+export function parseTrustedUsername(text: string) {
+  const target = text.trim().split(/\s+/)[1]?.replace(/^@/, "").toLowerCase() ?? "";
+  return /^[a-z0-9_]{5,32}$/.test(target) ? target : null;
+}
+
+export function buildTelegramTrustedText(usernames: string[]) {
+  if (usernames.length === 0) {
+    return "👤 Доверенных преподавателей пока нет. Администратор чата может добавить: /trust @username";
+  }
+  return [
+    `🎓 Доверенные преподаватели (${usernames.length}):`,
+    "",
+    ...usernames.map((username) => `• @${username}`),
+    "",
+    "Их сообщения получают максимальный вес в радаре источников.",
   ].join("\n");
 }
 

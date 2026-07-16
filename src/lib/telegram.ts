@@ -10,6 +10,12 @@ type TelegramCallResult =
   | { sent: true }
   | { sent: false; reason: "not-configured" | "telegram-error" | "network-error" };
 
+export type TelegramMemberAccess = {
+  verified: boolean;
+  administrator: boolean;
+  role: "group-lead" | "student";
+};
+
 async function callTelegram(method: string, body: Record<string, unknown>): Promise<TelegramCallResult> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) return { sent: false as const, reason: "not-configured" as const };
@@ -29,6 +35,39 @@ async function callTelegram(method: string, body: Record<string, unknown>): Prom
     return { sent: true as const };
   } catch {
     return { sent: false as const, reason: "network-error" as const };
+  }
+}
+
+export async function getTelegramMemberAccess(
+  chatId: string,
+  userId: number,
+): Promise<TelegramMemberAccess> {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return { verified: false, administrator: false, role: "student" };
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/getChatMember`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, user_id: userId }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return { verified: false, administrator: false, role: "student" };
+    const data = (await response.json()) as {
+      ok?: boolean;
+      result?: { status?: string };
+    };
+    if (!data.ok || !data.result?.status) {
+      return { verified: false, administrator: false, role: "student" };
+    }
+    const administrator = data.result.status === "creator" || data.result.status === "administrator";
+    return {
+      verified: true,
+      administrator,
+      role: administrator ? "group-lead" : "student",
+    };
+  } catch {
+    return { verified: false, administrator: false, role: "student" };
   }
 }
 

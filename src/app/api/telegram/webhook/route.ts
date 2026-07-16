@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
 import {
   appendSourceToEvent,
+  ensureGroup,
   findGroupById,
   listEvents,
   saveEvent,
+  setGroupTrustedUsername,
   updateEventStatus,
 } from "@/db/repository";
 import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
@@ -18,15 +20,18 @@ import {
   buildTelegramEventsText,
   buildTelegramHelpText,
   buildTelegramStatusText,
+  buildTelegramTrustedText,
   parseConfirmCallback,
   parseTelegramCommand,
+  parseTrustedUsername,
 } from "@/lib/telegram-bot";
 import {
   answerTelegramCallback,
   editTelegramMessageKeyboard,
+  getTelegramMemberAccess,
   sendTelegramMessage,
 } from "@/lib/telegram";
-import type { InboxItem } from "@/lib/types";
+import type { InboxItem, SourceRole } from "@/lib/types";
 
 type TelegramUpdate = {
   update_id?: number;
@@ -35,7 +40,7 @@ type TelegramUpdate = {
     date?: number;
     text?: string;
     chat?: { id?: number; title?: string; type?: string };
-    from?: { first_name?: string; last_name?: string; username?: string };
+    from?: { id?: number; first_name?: string; last_name?: string; username?: string };
   };
   callback_query?: {
     id?: string;
@@ -47,7 +52,7 @@ type TelegramUpdate = {
   };
 };
 
-function buildInboxItem(update: TelegramUpdate, text: string): InboxItem | null {
+function buildInboxItem(update: TelegramUpdate, text: string, role: SourceRole): InboxItem | null {
   const message = update.message;
   const chatId = message?.chat?.id;
   const messageId = message?.message_id;
@@ -78,7 +83,7 @@ function buildInboxItem(update: TelegramUpdate, text: string): InboxItem | null 
       {
         id: `tg-source:${chatId}:${messageId}`,
         author,
-        role: "student",
+        role,
         kind: "message",
         text,
         time: new Intl.DateTimeFormat("ru-RU", {
@@ -165,6 +170,42 @@ export async function POST(request: NextRequest) {
       replyText = buildTelegramStatusText(isDatabaseConfigured());
     } else if (!isDatabaseConfigured()) {
       replyText = "🟡 База пока не подключена, список событий недоступен.";
+    } else if (command === "trust" || command === "untrust" || command === "trusted") {
+      const groupId = `telegram:${chatId}`;
+      try {
+        const group = await findGroupById(groupId);
+        if (command === "trusted") {
+          replyText = buildTelegramTrustedText(group?.trustedUsernames ?? []);
+        } else {
+          const target = parseTrustedUsername(text);
+          const senderId = update.message?.from?.id;
+          if (!target) {
+            replyText = `Укажи username: /${command} @username`;
+          } else if (senderId === undefined) {
+            replyText = "Не удалось проверить права отправителя.";
+          } else {
+            const access = await getTelegramMemberAccess(String(chatId), senderId);
+            if (!access.verified || !access.administrator) {
+              replyText = "⛔ Эту команду может выполнить только администратор Telegram-чата.";
+            } else {
+              if (!group) {
+                await ensureGroup({
+                  id: groupId,
+                  name: update.message?.chat?.title || "Telegram",
+                  telegramChatId: String(chatId),
+                });
+              }
+              const updated = await setGroupTrustedUsername(groupId, target, command === "trust");
+              replyText = command === "trust"
+                ? `🎓 @${target} теперь доверенный преподаватель. Новые сообщения получат высокий приоритет.`
+                : `Роль преподавателя для @${target} снята.`;
+              if (!updated) replyText = "Не удалось обновить список доверия.";
+            }
+          }
+        }
+      } catch {
+        replyText = "Не удалось обновить роли. Попробуй ещё раз чуть позже.";
+      }
     } else {
       try {
         const items = await listEvents(`telegram:${chatId}`);
@@ -183,7 +224,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, command, replySent: reply.sent });
   }
 
-  const item = buildInboxItem(update, text);
+  let sourceRole: SourceRole = "student";
+  if (isDatabaseConfigured() && update.message?.from?.id !== undefined) {
+    const groupId = `telegram:${chatId}`;
+    const [group, access] = await Promise.all([
+      findGroupById(groupId).catch(() => null),
+      getTelegramMemberAccess(String(chatId), update.message.from.id),
+    ]);
+    const username = update.message.from.username?.toLowerCase();
+    sourceRole = username && group?.trustedUsernames.includes(username)
+      ? "teacher"
+      : access.role;
+  }
+
+  const item = buildInboxItem(update, text, sourceRole);
   if (!item) {
     return NextResponse.json({ ok: true, skipped: "missing-identifiers" });
   }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { answerTelegramCallback, sendTelegramMessage } from "./telegram";
+import { answerTelegramCallback, getTelegramMemberAccess, sendTelegramMessage } from "./telegram";
 
 const originalToken = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -62,5 +62,29 @@ describe("sendTelegramMessage", () => {
       "https://api.telegram.org/bottest-token/answerCallbackQuery",
       expect.any(Object),
     );
+  });
+
+  it("recognizes Telegram administrators as group leads", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "test-token";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, result: { status: "administrator" } }),
+    }));
+
+    await expect(getTelegramMemberAccess("-100", 42)).resolves.toEqual({
+      verified: true,
+      administrator: true,
+      role: "group-lead",
+    });
+  });
+
+  it("fails closed when member permissions cannot be verified", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "test-token";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    await expect(getTelegramMemberAccess("-100", 42)).resolves.toEqual({
+      verified: false,
+      administrator: false,
+      role: "student",
+    });
   });
 });

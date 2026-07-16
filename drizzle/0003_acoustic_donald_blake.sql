@@ -1,0 +1,1 @@
+ALTER TABLE "groups" ADD COLUMN "trusted_usernames" jsonb DEFAULT '[]'::jsonb NOT NULL;

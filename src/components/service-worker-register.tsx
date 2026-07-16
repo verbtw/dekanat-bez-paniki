@@ -5,10 +5,33 @@ import { useEffect } from "react";
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    const register = () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+    let interval = 0;
+    const resetReloadGuard = window.setTimeout(
+      () => window.sessionStorage.removeItem("dbp:sw-reloaded"),
+      5_000,
+    );
+    const onControllerChange = () => {
+      if (window.sessionStorage.getItem("dbp:sw-reloaded") === "1") return;
+      window.sessionStorage.setItem("dbp:sw-reloaded", "1");
+      window.location.reload();
+    };
+    const register = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        interval = window.setInterval(() => void registration.update(), 60 * 60 * 1_000);
+      } catch {
+        return;
+      }
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     if (document.readyState === "complete") void register();
     else window.addEventListener("load", register, { once: true });
-    return () => window.removeEventListener("load", register);
+    return () => {
+      window.removeEventListener("load", register);
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      window.clearTimeout(resetReloadGuard);
+      if (interval) window.clearInterval(interval);
+    };
   }, []);
   return null;
 }

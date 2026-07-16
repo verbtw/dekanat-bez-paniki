@@ -18,7 +18,7 @@ export function PwaInstall() {
       || ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
     if (standalone || window.localStorage.getItem("dbp:pwa-dismissed") === "1") return;
 
-    const frame = ios ? window.requestAnimationFrame(() => setVisible(true)) : 0;
+    const frame = window.requestAnimationFrame(() => setVisible(true));
 
     const onPrompt = (event: Event) => {
       event.preventDefault();
@@ -34,7 +34,7 @@ export function PwaInstall() {
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
-      if (frame) window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frame);
     };
   }, [ios]);
 

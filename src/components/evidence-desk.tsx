@@ -8,6 +8,7 @@ import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
 import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
 import { buildSharedMessage } from "@/lib/share-target";
+import { localizeInterface, type UiLocale } from "@/lib/ui-i18n";
 import {
   buildWorkspaceBackup,
   mergeBackupItems,
@@ -448,6 +449,8 @@ export function EvidenceDesk() {
   const [editDraft, setEditDraft] = useState<EditableEvent | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
+  const [locale, setLocale] = useState<UiLocale>("ru");
+  const [localeReady, setLocaleReady] = useState(false);
   const [workspaceToken, setWorkspaceToken] = useState("");
   const [requestedEventId, setRequestedEventId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("ИВТ-101 · демо");
@@ -463,6 +466,9 @@ export function EvidenceDesk() {
     const frame = window.requestAnimationFrame(() => {
       const currentTheme = document.documentElement.dataset.theme;
       setTheme(currentTheme === "dark" ? "dark" : "light");
+      const savedLocale = window.localStorage.getItem("morrow:locale");
+      setLocale(savedLocale === "en" ? "en" : "ru");
+      setLocaleReady(true);
       const params = new URLSearchParams(window.location.search);
       const isShareTarget = params.get("share") === "1";
       const urlWorkspace = params.get("workspace")?.trim() || "";
@@ -493,6 +499,23 @@ export function EvidenceDesk() {
 
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!localeReady) return;
+    document.documentElement.lang = locale;
+    window.localStorage.setItem("morrow:locale", locale);
+    localizeInterface(document.body, locale);
+
+    const observer = new MutationObserver(() => localizeInterface(document.body, locale));
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "placeholder", "title"],
+    });
+    return () => observer.disconnect();
+  }, [locale, localeReady]);
 
   useEffect(() => {
     if (!workspaceReady) return;
@@ -989,8 +1012,8 @@ export function EvidenceDesk() {
             <span />
           </div>
           <div>
-            <strong>деканат</strong>
-            <small>без паники</small>
+            <strong>morrow</strong>
+            <small>quietly in sync</small>
           </div>
         </div>
 
@@ -1032,6 +1055,22 @@ export function EvidenceDesk() {
           <span className={`theme-switch ${theme}`}><i /></span>
         </button>
 
+        <div className="language-toggle" role="group" aria-label="Язык интерфейса">
+          <span aria-hidden="true">文</span>
+          <button
+            type="button"
+            className={locale === "ru" ? "active" : ""}
+            aria-pressed={locale === "ru"}
+            onClick={() => setLocale("ru")}
+          >RU</button>
+          <button
+            type="button"
+            className={locale === "en" ? "active" : ""}
+            aria-pressed={locale === "en"}
+            onClick={() => setLocale("en")}
+          >EN</button>
+        </div>
+
         <button
           className={syncError ? "sync-card error" : "sync-card"}
           type="button"
@@ -1064,6 +1103,16 @@ export function EvidenceDesk() {
           </div>
         </button>
       </aside>
+
+      <div className="mobile-preferences" aria-label="Язык интерфейса">
+        <button type="button" onClick={() => setLocale(locale === "ru" ? "en" : "ru")}>
+          {locale === "ru" ? "EN" : "RU"}
+        </button>
+        <button type="button" onClick={toggleTheme} aria-label={`Включить ${theme === "light" ? "тёмную" : "светлую"} тему`}>
+          {theme === "light" ? "☾" : "☀"}
+        </button>
+        <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Настройки группы">•••</button>
+      </div>
 
       {activeNav === "inbox" ? (
         <>

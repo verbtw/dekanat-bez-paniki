@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Деканат без паники",
-    short_name: "Деканат",
+    name: "Morrow",
+    short_name: "Morrow",
     description: "Проверяемые события из учебных чатов без потерянных переносов и конфликтующих сообщений.",
     id: "/",
     start_url: "/?source=installed-app",

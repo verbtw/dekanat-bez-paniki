@@ -60,7 +60,7 @@ export function PwaInstall() {
     <aside className="install-card" aria-label="Установить приложение">
       <span className="install-icon">Д</span>
       <div>
-        <strong>Установить как программу</strong>
+        <strong>Установить Morrow</strong>
         <small>{instructions
           ? ios
             ? "В Safari нажми «Поделиться», затем «На экран Домой»."

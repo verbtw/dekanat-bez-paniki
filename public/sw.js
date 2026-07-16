@@ -1,4 +1,4 @@
-const CACHE = "dbp-shell-v2";
+const CACHE = "morrow-shell-v3";
 const SHELL = ["/", "/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png"];
 
 self.addEventListener("install", (event) => {

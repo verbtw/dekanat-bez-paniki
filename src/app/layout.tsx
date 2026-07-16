@@ -13,15 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Деканат без паники — сообщения, которым можно доверять",
+  title: "Morrow — keep tomorrow clear",
   description:
     "Превращает сообщения и подписи к файлам из учебных чатов в проверенные события.",
   referrer: "no-referrer",
-  applicationName: "Деканат без паники",
+  applicationName: "Morrow",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Деканат",
+    title: "Morrow",
   },
   icons: {
     apple: "/app-icon-192.png",
@@ -29,6 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
+  viewportFit: "cover" as const,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#4054d6" },
     { media: "(prefers-color-scheme: dark)", color: "#0b1120" },

@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const groupName = group.name;
     const items = await listEvents(group.id);
-    const calendar = buildGroupCalendar(items, `${groupName} · Деканат без паники`);
+    const calendar = buildGroupCalendar(items, `${groupName} · Morrow`);
 
     return new NextResponse(calendar, {
       headers: {

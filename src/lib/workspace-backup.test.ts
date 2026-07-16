@@ -21,6 +21,11 @@ describe("workspace backup", () => {
     expect(parseWorkspaceBackup({ ...backup, items: [{ id: "broken" }] }).success).toBe(false);
   });
 
+  it("keeps accepting legacy backups after the Morrow rename", () => {
+    const backup = buildWorkspaceBackup("ИВТ-101", demoItems);
+    expect(parseWorkspaceBackup({ ...backup, format: "dekanat-bez-paniki" }).success).toBe(true);
+  });
+
   it("merges by stable id and lets the imported copy win", () => {
     const changed = { ...demoItems[0], reason: "Восстановленная версия" };
     const merged = mergeBackupItems(demoItems, [changed]);

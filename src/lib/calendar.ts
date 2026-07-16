@@ -52,7 +52,7 @@ export function buildCalendarEvent(item: InboxItem, now = new Date()) {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Деканат без паники//RU",
+    "PRODID:-//Morrow//RU",
     "CALSCALE:GREGORIAN",
     ...eventLines,
     "END:VCALENDAR",
@@ -69,7 +69,7 @@ export function buildGroupCalendar(items: InboxItem[], calendarName: string, now
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Деканат без паники//RU",
+    "PRODID:-//Morrow//RU",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeIcs(calendarName)}`,

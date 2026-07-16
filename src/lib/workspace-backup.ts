@@ -3,7 +3,7 @@ import { inboxItemSchema } from "./event-validation";
 import type { InboxItem } from "./types";
 
 const workspaceBackupSchema = z.object({
-  format: z.literal("dekanat-bez-paniki"),
+  format: z.enum(["morrow", "dekanat-bez-paniki"]),
   version: z.literal(1),
   createdAt: z.string().datetime(),
   workspaceName: z.string().trim().min(1).max(240),
@@ -18,7 +18,7 @@ export function buildWorkspaceBackup(
   now = new Date(),
 ): WorkspaceBackup {
   return {
-    format: "dekanat-bez-paniki",
+    format: "morrow",
     version: 1,
     createdAt: now.toISOString(),
     workspaceName,

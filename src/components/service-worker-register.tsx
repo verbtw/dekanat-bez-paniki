@@ -5,6 +5,19 @@ import { useEffect } from "react";
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV !== "production") {
+      void navigator.serviceWorker.getRegistrations().then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister())),
+      );
+      if ("caches" in window) {
+        void window.caches.keys().then((keys) => Promise.all(
+          keys
+            .filter((key) => key.startsWith("morrow-shell") || key.startsWith("dbp-shell"))
+            .map((key) => window.caches.delete(key)),
+        ));
+      }
+      return;
+    }
     let interval = 0;
     const resetReloadGuard = window.setTimeout(
       () => window.sessionStorage.removeItem("dbp:sw-reloaded"),

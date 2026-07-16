@@ -2,34 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { DatabaseNotConfiguredError, isDatabaseConfigured } from "@/db/client";
 import {
   appendSourceToEvent,
-  demoGroupId,
   findGroupByAccessToken,
   listEvents,
   saveEvent,
 } from "@/db/repository";
 import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
 import { inboxItemSchema } from "@/lib/event-validation";
+import { demoItems } from "@/lib/demo-data";
 
 export async function GET(request: NextRequest) {
+  const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
+  if (!workspace) {
+    return NextResponse.json({
+      mode: "local",
+      items: demoItems,
+      workspace: { name: "ИВТ-101 · демо" },
+    });
+  }
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ mode: "local", items: [] });
   }
 
-  const workspace = request.nextUrl.searchParams.get("workspace")?.trim();
   try {
-    const group = workspace ? await findGroupByAccessToken(workspace) : null;
-    if (workspace && !group) {
+    const group = await findGroupByAccessToken(workspace);
+    if (!group) {
       return NextResponse.json(
         { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
         { status: 404 },
       );
     }
-    const groupId = group?.id ?? demoGroupId;
-    const items = await listEvents(groupId);
+    const items = await listEvents(group.id);
     return NextResponse.json({
       mode: "database",
       items,
-      workspace: group ? { name: group.name } : { name: "ИВТ-101 · демо" },
+      workspace: { name: group.name },
     });
   } catch {
     return NextResponse.json(
@@ -48,6 +54,16 @@ export async function POST(request: NextRequest) {
   }
 
   const body: unknown = await request.json().catch(() => null);
+  const workspace =
+    typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
+      ? body.workspace.trim()
+      : "";
+  if (!workspace) {
+    return NextResponse.json(
+      { error: "Публичное демо сохраняется только на устройстве.", code: "WORKSPACE_REQUIRED" },
+      { status: 403 },
+    );
+  }
   const parsed = inboxItemSchema.safeParse(
     typeof body === "object" && body !== null && "item" in body ? body.item : body,
   );
@@ -59,22 +75,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const workspace =
-      typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
-        ? body.workspace.trim()
-        : "";
-    const group = workspace ? await findGroupByAccessToken(workspace) : null;
-    if (workspace && !group) {
+    const group = await findGroupByAccessToken(workspace);
+    if (!group) {
       return NextResponse.json(
         { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
         { status: 404 },
       );
     }
-    const groupId = group?.id ?? demoGroupId;
-    const existing = await listEvents(groupId);
+    const existing = await listEvents(group.id);
     const assessment = assessEventConflict(parsed.data, existing);
     if (assessment.kind === "duplicate") {
-      await appendSourceToEvent(assessment.matchedId, parsed.data.sources[0], groupId);
+      await appendSourceToEvent(assessment.matchedId, parsed.data.sources[0], group.id);
       return NextResponse.json({
         saved: true,
         merged: true,
@@ -83,7 +94,7 @@ export async function POST(request: NextRequest) {
       });
     }
     const item = applyConflictAssessment(parsed.data, assessment);
-    await saveEvent(item, groupId);
+    await saveEvent(item, group.id);
     return NextResponse.json({ saved: true, item, assessment }, { status: 201 });
   } catch (error) {
     const notConfigured = error instanceof DatabaseNotConfiguredError;

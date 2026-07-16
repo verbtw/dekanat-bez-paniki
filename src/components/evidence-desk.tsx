@@ -21,6 +21,7 @@ type Theme = "light" | "dark";
 type StorageMode = "checking" | "local" | "database";
 type InboxFilter = "all" | "attention";
 type EditableEvent = Pick<ExtractedEvent, "title" | "subject" | "date" | "time" | "room">;
+type SyncResult = "database" | "local" | "failed";
 
 const workspaceStorageKey = "dbp:workspace:v1";
 function getWorkspaceStorageKey(workspace: string) {
@@ -40,53 +41,57 @@ function saveWorkspace(items: InboxItem[], workspace = "") {
 }
 
 async function pushEventToServer(item: InboxItem, workspace: string) {
+  if (!workspace) return "local" as const;
   try {
     const response = await fetch("/api/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ item, workspace }),
     });
-    return response.ok;
+    return response.ok ? "database" as const : "failed" as const;
   } catch {
-    return false;
+    return "failed" as const;
   }
 }
 
 async function pushStatusToServer(id: string, status: ReviewStatus, workspace: string) {
+  if (!workspace) return "local" as const;
   try {
     const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status, workspace }),
     });
-    return response.ok;
+    return response.ok ? "database" as const : "failed" as const;
   } catch {
-    return false;
+    return "failed" as const;
   }
 }
 
 async function pushEventEditToServer(id: string, event: EditableEvent, workspace: string) {
+  if (!workspace) return "local" as const;
   try {
     const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ event, workspace }),
     });
-    return response.ok;
+    return response.ok ? "database" as const : "failed" as const;
   } catch {
-    return false;
+    return "failed" as const;
   }
 }
 
 async function deleteEventFromServer(id: string, workspace: string) {
+  if (!workspace) return "local" as const;
   try {
     const suffix = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
     const response = await fetch(`/api/events/${encodeURIComponent(id)}${suffix}`, {
       method: "DELETE",
     });
-    return response.ok;
+    return response.ok ? "database" as const : "failed" as const;
   } catch {
-    return false;
+    return "failed" as const;
   }
 }
 
@@ -579,20 +584,36 @@ export function EvidenceDesk() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
+  function applySyncResult(result: SyncResult, failureMessage: string) {
+    if (result === "database") {
+      setStorageMode("database");
+      setSyncError(null);
+    } else if (result === "local") {
+      setStorageMode("local");
+      setSyncError(null);
+    } else {
+      setSyncError(failureMessage);
+    }
+  }
+
   async function retrySync() {
     if (syncing) return;
     setSyncing(true);
     setStorageMode("checking");
     try {
-      const results = items.length
+      const results: SyncResult[] = items.length
         ? await Promise.all(items.map((item) => pushEventToServer(item, workspaceToken)))
-        : [await fetch(workspaceToken
-          ? `/api/events?workspace=${encodeURIComponent(workspaceToken)}`
-          : "/api/events").then((response) => response.ok).catch(() => false)];
-      if (!results.every(Boolean)) throw new Error("PARTIAL_SYNC");
-      setStorageMode("database");
+        : workspaceToken
+          ? [await fetch(`/api/events?workspace=${encodeURIComponent(workspaceToken)}`)
+            .then((response) => response.ok ? "database" as const : "failed" as const)
+            .catch(() => "failed" as const)]
+          : ["local"];
+      if (results.includes("failed")) throw new Error("PARTIAL_SYNC");
+      setStorageMode(workspaceToken ? "database" : "local");
       setSyncError(null);
-      flash(items.length ? `Синхронизировано карточек: ${items.length}` : "Связь с базой восстановлена");
+      flash(workspaceToken
+        ? items.length ? `Синхронизировано карточек: ${items.length}` : "Связь с базой восстановлена"
+        : "Демо работает локально — серверные данные не изменяются");
     } catch {
       setStorageMode("local");
       setSyncError("Не удалось синхронизировать все карточки — локальные данные сохранены");
@@ -640,12 +661,7 @@ export function EvidenceDesk() {
       return next;
     });
     void pushStatusToServer(selected.id, status, workspaceToken).then((synced) => {
-      if (synced) {
-        setStorageMode("database");
-        setSyncError(null);
-      } else {
-        setSyncError("Изменение сохранено локально и ждёт синхронизации");
-      }
+      applySyncResult(synced, "Изменение сохранено локально и ждёт синхронизации");
     });
     flash(status === "confirmed" ? "Событие подтверждено" : "Возвращено на проверку");
   }
@@ -738,12 +754,7 @@ export function EvidenceDesk() {
     ));
     setEditOpen(false);
     void pushEventEditToServer(selected.id, editDraft, workspaceToken).then((synced) => {
-      if (synced) {
-        setStorageMode("database");
-        setSyncError(null);
-      } else {
-        setSyncError("Исправления сохранены локально и ждут синхронизации");
-      }
+      applySyncResult(synced, "Исправления сохранены локально и ждут синхронизации");
     });
     flash("Исправления сохранены — проверь событие");
   }
@@ -772,7 +783,7 @@ export function EvidenceDesk() {
     setDeleteOpen(false);
     setActionMenuOpen(false);
     void deleteEventFromServer(deletingId, workspaceToken).then((synced) => {
-      if (!synced) setSyncError("Удаление сохранено локально, но сервер пока недоступен");
+      applySyncResult(synced, "Удаление сохранено локально, но сервер пока недоступен");
     });
     flash("Карточка удалена");
   }
@@ -834,12 +845,7 @@ export function EvidenceDesk() {
     setNewMessage("");
     setComposerOpen(false);
     void pushEventToServer(item, workspaceToken).then((synced) => {
-      if (synced) {
-        setStorageMode("database");
-        setSyncError(null);
-      } else {
-        setSyncError("Новое событие сохранено локально и ждёт синхронизации");
-      }
+      applySyncResult(synced, "Новое событие сохранено локально и ждёт синхронизации");
     });
     flash(
       assessment.kind === "duplicate"

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import { demoGroupId, findGroupByAccessToken, listEvents } from "@/db/repository";
+import { findGroupByAccessToken, listEvents } from "@/db/repository";
 import { buildGroupCalendar } from "@/lib/calendar";
+import { demoItems } from "@/lib/demo-data";
 
 function safeFilename(name: string) {
   const normalized = name
@@ -14,6 +15,18 @@ function safeFilename(name: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
+  if (!workspace) {
+    return new NextResponse(buildGroupCalendar(demoItems, "ИВТ-101 · демо"), {
+      headers: {
+        "content-type": "text/calendar; charset=utf-8",
+        "content-disposition": "inline; filename=demo-calendar.ics",
+        "cache-control": "public, max-age=300",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow",
+      },
+    });
+  }
   if (!isDatabaseConfigured()) {
     return NextResponse.json(
       { error: "Календарь временно недоступен.", code: "DATABASE_NOT_CONFIGURED" },
@@ -21,19 +34,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
   try {
-    const group = workspace ? await findGroupByAccessToken(workspace) : null;
-    if (workspace && !group) {
+    const group = await findGroupByAccessToken(workspace);
+    if (!group) {
       return NextResponse.json(
         { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
         { status: 404 },
       );
     }
 
-    const groupId = group?.id ?? demoGroupId;
-    const groupName = group?.name ?? "ИВТ-101 · демо";
-    const items = await listEvents(groupId);
+    const groupName = group.name;
+    const items = await listEvents(group.id);
     const calendar = buildGroupCalendar(items, `${groupName} · Деканат без паники`);
 
     return new NextResponse(calendar, {

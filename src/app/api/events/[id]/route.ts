@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
 import {
   deleteEvent,
-  demoGroupId,
   findGroupByAccessToken,
   updateEventFields,
   updateEventStatus,
@@ -10,8 +9,8 @@ import {
 import { editableEventSchema, reviewStatusSchema } from "@/lib/event-validation";
 
 async function resolveGroupId(workspace: string) {
-  const group = workspace ? await findGroupByAccessToken(workspace) : null;
-  return { groupId: group?.id ?? demoGroupId, found: !workspace || Boolean(group) };
+  const group = await findGroupByAccessToken(workspace);
+  return { groupId: group?.id ?? "", found: Boolean(group) };
 }
 
 export async function PATCH(
@@ -42,6 +41,12 @@ export async function PATCH(
       typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
         ? body.workspace.trim()
         : "";
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "Публичное демо изменяется только локально.", code: "WORKSPACE_REQUIRED" },
+        { status: 403 },
+      );
+    }
     const { groupId, found } = await resolveGroupId(workspace);
     if (!found) {
       return NextResponse.json(
@@ -77,6 +82,12 @@ export async function DELETE(
 
   const { id } = await params;
   const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
+  if (!workspace) {
+    return NextResponse.json(
+      { error: "Публичное демо изменяется только локально.", code: "WORKSPACE_REQUIRED" },
+      { status: 403 },
+    );
+  }
   try {
     const { groupId, found } = await resolveGroupId(workspace);
     if (!found) {

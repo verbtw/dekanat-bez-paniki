@@ -70,11 +70,18 @@ describe("Telegram bot commands", () => {
   });
 
   it("builds a scoped confirmation callback", () => {
-    const item = { ...demoItems[0], id: "tg:-100123:42" };
+    const item = { ...demoItems[1], id: "tg:-100123:42" };
     const keyboard = buildTelegramEventKeyboard(item, true, "https://example.com");
     expect(keyboard.inline_keyboard[0][0].callback_data).toBe("confirm:tg:-100123:42");
     expect(parseConfirmCallback("confirm:tg:-100123:42")).toBe("tg:-100123:42");
     expect(parseConfirmCallback("other:42")).toBeNull();
+  });
+
+  it("does not offer one-click confirmation for a conflict", () => {
+    const keyboard = buildTelegramEventKeyboard(demoItems[0], true, "https://example.com");
+    expect(keyboard.inline_keyboard).toEqual([
+      [{ text: "🌐 Открыть приложение", url: "https://example.com" }],
+    ]);
   });
 
   it("builds an exact workspace deep link without losing existing parameters", () => {

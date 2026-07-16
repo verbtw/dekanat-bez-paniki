@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { EvidenceSource, ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
+import { validateReviewTransition } from "@/lib/review-workflow";
 import { getDb } from "./client";
 import {
   eventActivities,
@@ -277,6 +278,10 @@ export async function updateEventStatus(id: string, status: ReviewStatus, groupI
     .where(where)
     .limit(1);
   if (!current) return null;
+  const transition = validateReviewTransition(current.status, status);
+  if (!transition.allowed) {
+    return { id, status: current.status, blocked: transition.code } as const;
+  }
 
   const updateQuery = db
     .update(events)

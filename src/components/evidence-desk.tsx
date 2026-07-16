@@ -658,6 +658,11 @@ export function EvidenceDesk() {
 
   function updateStatus(status: ReviewStatus) {
     if (!selected) return;
+    if (selected.status === "conflict" && status !== "conflict") {
+      openEditor();
+      flash("Сначала исправь поле, по которому источники не сходятся");
+      return;
+    }
     setItems((current) => {
       const next = current.map((item) =>
         item.id === selected.id
@@ -753,6 +758,10 @@ export function EvidenceDesk() {
         .filter((key) => selected.event[key] !== editDraft[key])
         .map((key) => [key, `${selected.event[key]} → ${editDraft[key]}`]),
     );
+    if (Object.keys(activityDetails).length === 0) {
+      flash("Измени хотя бы одно поле, чтобы разрешить конфликт");
+      return;
+    }
     setItems((current) => current.map((item) =>
       item.id === selected.id
         ? {
@@ -1161,9 +1170,9 @@ export function EvidenceDesk() {
             <p><strong>Проверь решение</strong><small>Изменения попадут в календарь группы</small></p>
           </div>
           <div className="decision-actions">
-            <button className="secondary-button" onClick={() => updateStatus("review")} disabled={selected.status === "review"}>Вернуть на проверку</button>
-            <button className="primary-button" onClick={() => updateStatus("confirmed")} disabled={selected.status === "confirmed"}>
-              <span>✓</span> {selected.status === "confirmed" ? "Подтверждено" : "Подтвердить"}
+            <button className="secondary-button" onClick={() => updateStatus("review")} disabled={selected.status === "review" || selected.status === "conflict"}>Вернуть на проверку</button>
+            <button className="primary-button" onClick={selected.status === "conflict" ? openEditor : () => updateStatus("confirmed")} disabled={selected.status === "confirmed"}>
+              <span>{selected.status === "conflict" ? "✎" : "✓"}</span> {selected.status === "confirmed" ? "Подтверждено" : selected.status === "conflict" ? "Разобрать конфликт" : "Подтвердить"}
             </button>
           </div>
         </footer>

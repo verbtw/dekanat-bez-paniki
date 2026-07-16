@@ -176,7 +176,7 @@ export function buildTelegramEventKeyboard(
   appUrl: string,
 ): TelegramInlineKeyboardMarkup {
   const rows: TelegramInlineKeyboardMarkup["inline_keyboard"] = [];
-  if (stored) {
+  if (stored && item.status !== "conflict") {
     rows.push([{ text: "✅ Подтвердить", callback_data: `confirm:${item.id}` }]);
   }
   rows.push([{ text: "🌐 Открыть приложение", url: appUrl }]);

@@ -60,6 +60,15 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: "Событие не найдено." }, { status: 404 });
     }
+    if ("blocked" in updated) {
+      return NextResponse.json(
+        {
+          error: "Конфликт нельзя закрыть сменой статуса — сначала исправьте расходящиеся поля.",
+          code: updated.blocked,
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ updated });
   } catch {
     return NextResponse.json(

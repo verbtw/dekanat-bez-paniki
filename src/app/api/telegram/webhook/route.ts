@@ -146,6 +146,10 @@ export async function POST(request: NextRequest) {
       await answerTelegramCallback(callbackId, "Событие не найдено или база недоступна.");
       return NextResponse.json({ ok: true, callback: "not-found" });
     }
+    if ("blocked" in updated) {
+      await answerTelegramCallback(callbackId, "Сначала разреши конфликт в приложении.");
+      return NextResponse.json({ ok: true, callback: "conflict-blocked", eventId });
+    }
 
     const appUrl = process.env.APP_URL?.trim() || "https://dekanat-bez-paniki.vercel.app";
     const group = await findGroupById(groupId).catch(() => null);

@@ -465,6 +465,8 @@ export function EvidenceDesk() {
       const params = new URLSearchParams(window.location.search);
       setWorkspaceToken(params.get("workspace")?.trim() || "");
       setRequestedEventId(params.get("event")?.trim() || "");
+      const requestedView = params.get("view");
+      if (navItems.some((item) => item.id === requestedView)) setActiveNav(requestedView as NavId);
       setWorkspaceReady(true);
     });
 
@@ -648,6 +650,7 @@ export function EvidenceDesk() {
     const url = new URL(window.location.origin + window.location.pathname);
     if (includeWorkspace && workspaceToken) url.searchParams.set("workspace", workspaceToken);
     if (eventId) url.searchParams.set("event", eventId);
+    if (!eventId && activeNav !== "inbox") url.searchParams.set("view", activeNav);
     return url.toString();
   }
 

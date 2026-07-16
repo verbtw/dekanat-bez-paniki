@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { EvidenceSource, ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
 import { validateReviewTransition } from "@/lib/review-workflow";
 import { getDb } from "./client";
@@ -13,6 +13,13 @@ import {
 } from "./schema";
 
 export const demoGroupId = "demo:ivt-101";
+
+export class RepositoryOwnershipError extends Error {
+  constructor(resource: "event" | "source") {
+    super(`${resource.toUpperCase()}_OWNERSHIP_CONFLICT`);
+    this.name = "RepositoryOwnershipError";
+  }
+}
 
 function toInboxItem(
   event: EventRow,
@@ -187,6 +194,26 @@ export async function saveEvent(
   group?: { name?: string; telegramChatId?: string },
 ) {
   const db = getDb();
+  const [existingEvent] = await db
+    .select({ groupId: events.groupId })
+    .from(events)
+    .where(eq(events.id, item.id))
+    .limit(1);
+  if (existingEvent && existingEvent.groupId !== groupId) {
+    throw new RepositoryOwnershipError("event");
+  }
+
+  const sourceIds = item.sources.map((source) => source.id);
+  if (sourceIds.length) {
+    const existingSources = await db
+      .select({ eventId: sources.eventId })
+      .from(sources)
+      .where(inArray(sources.id, sourceIds));
+    if (existingSources.some((source) => source.eventId !== item.id)) {
+      throw new RepositoryOwnershipError("source");
+    }
+  }
+
   const savedGroup = await ensureGroup({
     id: groupId,
     name: group?.name ?? (groupId === demoGroupId ? "ИВТ-101" : groupId),

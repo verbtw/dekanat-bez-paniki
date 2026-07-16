@@ -17,6 +17,22 @@ export const metadata: Metadata = {
   description:
     "Превращает сообщения и подписи к файлам из учебных чатов в проверенные события.",
   referrer: "no-referrer",
+  applicationName: "Деканат без паники",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Деканат",
+  },
+  icons: {
+    apple: "/app-icon-192.png",
+  },
+};
+
+export const viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#4054d6" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+  ],
 };
 
 const themeBootstrap = `

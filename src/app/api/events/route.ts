@@ -4,6 +4,7 @@ import {
   appendSourceToEvent,
   findGroupByAccessToken,
   listEvents,
+  RepositoryOwnershipError,
   saveEvent,
 } from "@/db/repository";
 import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
@@ -105,12 +106,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ saved: true, item, assessment }, { status: 201 });
   } catch (error) {
     const notConfigured = error instanceof DatabaseNotConfiguredError;
+    const ownershipConflict = error instanceof RepositoryOwnershipError;
     return NextResponse.json(
       {
-        error: notConfigured ? "PostgreSQL ещё не подключён." : "Не удалось сохранить событие.",
-        code: notConfigured ? "DATABASE_NOT_CONFIGURED" : "DATABASE_WRITE_FAILED",
+        error: notConfigured
+          ? "PostgreSQL ещё не подключён."
+          : ownershipConflict
+            ? "Идентификатор уже принадлежит другому рабочему пространству."
+            : "Не удалось сохранить событие.",
+        code: notConfigured
+          ? "DATABASE_NOT_CONFIGURED"
+          : ownershipConflict
+            ? "RESOURCE_OWNERSHIP_CONFLICT"
+            : "DATABASE_WRITE_FAILED",
       },
-      { status: notConfigured ? 503 : 500 },
+      { status: notConfigured ? 503 : ownershipConflict ? 409 : 500 },
     );
   }
 }

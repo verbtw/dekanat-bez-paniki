@@ -1,14 +1,14 @@
 import type { InboxItem } from "./types";
 import type { TelegramInlineKeyboardMarkup } from "./telegram";
 
-export type TelegramBotCommand = "start" | "help" | "status" | "events" | "unknown" | null;
+export type TelegramBotCommand = "start" | "help" | "status" | "events" | "conflicts" | "unknown" | null;
 
 export function parseTelegramCommand(text: string): TelegramBotCommand {
   const token = text.trim().split(/\s+/, 1)[0];
   if (!token.startsWith("/")) return null;
 
   const command = token.slice(1).split("@", 1)[0].toLowerCase();
-  if (command === "start" || command === "help" || command === "status" || command === "events") {
+  if (command === "start" || command === "help" || command === "status" || command === "events" || command === "conflicts") {
     return command;
   }
   return "unknown";
@@ -23,6 +23,7 @@ export function buildTelegramHelpText(appUrl: string) {
     "",
     "Команды:",
     "/events — последние события этого чата",
+    "/conflicts — события, где источники не сходятся",
     "/status — состояние бота и базы",
     "/help — эта подсказка",
     "",
@@ -58,17 +59,44 @@ export function buildTelegramEventsText(items: InboxItem[]) {
   return ["📅 События этого чата:", "", ...lines].join("\n");
 }
 
+export function buildTelegramConflictsText(items: InboxItem[]) {
+  const conflicts = items.filter((item) => item.status === "conflict");
+  if (conflicts.length === 0) {
+    return "✅ Активных противоречий нет. Все события либо подтверждены, либо ждут обычной проверки.";
+  }
+  return [
+    `⚠️ Противоречия (${conflicts.length}):`,
+    "",
+    ...conflicts.slice(0, 5).flatMap((item, index) => [
+      `${index + 1}. ${item.event.title}`,
+      `   ${item.reason}`,
+    ]),
+    "",
+    "Открой приложение, чтобы сравнить источники и исправить поля.",
+  ].join("\n");
+}
+
 export function buildTelegramEventText(item: InboxItem, stored: boolean) {
   return [
-    `${item.event.confidence >= 84 ? "🧩" : "⚠️"} Нашёл событие: ${item.event.title}`,
+    `${item.status === "conflict" ? "⚠️" : item.event.confidence >= 84 ? "🧩" : "🔎"} Нашёл событие: ${item.event.title}`,
     `📅 Дата: ${formatEventDate(item.event.date)}`,
     `🕐 Время: ${item.event.time}`,
     `🚪 Аудитория: ${item.event.room}`,
     `🎯 Уверенность: ${item.event.confidence}%`,
+    ...(item.status === "conflict" ? ["", `Конфликт: ${item.reason}`] : []),
     "",
     stored
       ? "Сохранил вместе с исходным сообщением. Подтверди событие или открой подробности."
       : "База пока недоступна — открой веб-приложение для локальной проверки.",
+  ].join("\n");
+}
+
+export function buildTelegramDuplicateText(item: InboxItem) {
+  return [
+    `♻️ Это уже есть: ${item.event.title}`,
+    `📅 ${formatEventDate(item.event.date)} · ${item.event.time} · ${item.event.room}`,
+    "",
+    "Новую карточку не создавал — добавил сообщение как ещё один источник к существующей.",
   ].join("\n");
 }
 

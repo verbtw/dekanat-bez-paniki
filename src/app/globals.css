@@ -536,6 +536,7 @@ textarea:focus-visible {
 .activity-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #d9def8; border-radius: 9px; background: var(--cobalt-pale); color: var(--cobalt); font-size: 11px; font-weight: 750; }
 .activity-entry.edited .activity-mark { border-color: #f2d8ad; background: var(--amber-pale); color: var(--amber); }
 .activity-entry.status_changed .activity-mark { border-color: #bee7db; background: var(--mint-pale); color: var(--mint); }
+.activity-entry.source_added .activity-mark { border-color: #c8d0f7; background: var(--cobalt-pale); color: var(--cobalt); }
 .activity-entry strong { font-size: 10px; }
 .activity-entry p { margin: 3px 0 0; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .activity-entry footer { display: grid; justify-items: end; gap: 3px; color: var(--muted); font-size: 8px; }
@@ -929,6 +930,63 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
   background: var(--paper);
 }
 
+/* Conflict radar */
+.radar-state { display: inline-flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--muted); font-family: "Geist Mono", monospace; font-size: 8px; }
+.radar-state i { width: 7px; height: 7px; border-radius: 50%; }
+.radar-state.warning { border-color: color-mix(in srgb, var(--coral) 32%, var(--line)); color: var(--coral); }
+.radar-state.warning i { background: var(--coral); box-shadow: 0 0 0 4px var(--coral-pale); }
+.radar-state.safe i { background: var(--mint); box-shadow: 0 0 0 4px var(--mint-pale); }
+.radar-dashboard { display: grid; max-width: 1120px; grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.35fr); gap: 18px; margin: 30px auto 18px; }
+.radar-scope { display: grid; place-items: center; min-height: 310px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: radial-gradient(circle at 50% 45%, var(--cobalt-pale), var(--white) 66%); overflow: hidden; }
+.radar-orbit { position: relative; display: grid; place-items: center; width: 230px; height: 230px; }
+.orbit-ring { position: absolute; border: 1px solid color-mix(in srgb, var(--cobalt) 24%, transparent); border-radius: 50%; }
+.ring-one { inset: 9px; }
+.ring-two { inset: 42px; }
+.ring-three { inset: 76px; }
+.radar-orbit::before,
+.radar-orbit::after { content: ""; position: absolute; background: color-mix(in srgb, var(--cobalt) 16%, transparent); }
+.radar-orbit::before { top: 0; bottom: 0; left: 50%; width: 1px; }
+.radar-orbit::after { top: 50%; right: 0; left: 0; height: 1px; }
+.radar-orbit > div { z-index: 2; display: grid; place-items: center; width: 86px; height: 86px; border: 1px solid color-mix(in srgb, var(--cobalt) 30%, var(--line)); border-radius: 50%; background: var(--white); box-shadow: 0 12px 30px rgba(64, 84, 214, 0.13); text-align: center; }
+.radar-orbit > div strong { color: var(--coral); font-family: "Geist Mono", monospace; font-size: 28px; line-height: 1; }
+.radar-orbit > div span { color: var(--muted); font-size: 7px; line-height: 1.25; }
+.radar-orbit > i { position: absolute; z-index: 3; width: 11px; height: 11px; border: 2px solid var(--white); border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 5px color-mix(in srgb, var(--coral) 18%, transparent); animation: radar-ping 2.4s ease-in-out infinite; }
+.radar-orbit > i:nth-of-type(1) { top: 34px; right: 55px; }
+.radar-orbit > i:nth-of-type(2) { right: 24px; bottom: 68px; animation-delay: 400ms; }
+.radar-orbit > i:nth-of-type(3) { bottom: 35px; left: 54px; animation-delay: 800ms; }
+.radar-orbit > i:nth-of-type(4) { top: 73px; left: 27px; animation-delay: 1200ms; }
+.radar-scope footer { display: flex; gap: 18px; color: var(--muted); font-size: 8px; }
+.radar-scope footer span { display: inline-flex; align-items: center; gap: 6px; }
+.radar-scope footer i { width: 6px; height: 6px; border-radius: 50%; }
+.risk-dot { background: var(--coral); }
+.review-dot { background: var(--amber); }
+.radar-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.radar-metrics article { display: grid; align-content: center; min-height: 145px; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--white); }
+.radar-metrics article:last-child { grid-column: 1 / -1; min-height: 110px; }
+.radar-metrics span { color: var(--muted); font-size: 8px; font-weight: 650; text-transform: uppercase; }
+.radar-metrics strong { margin-top: 9px; font-family: "Geist Mono", monospace; font-size: 27px; }
+.radar-metrics small { margin-top: 7px; color: var(--muted); font-size: 8px; }
+.radar-metrics article > div { height: 5px; margin-top: 13px; overflow: hidden; border-radius: 8px; background: var(--cobalt-pale); }
+.radar-metrics article > div i { display: block; height: 100%; border-radius: inherit; background: var(--cobalt); }
+.radar-columns { display: grid; max-width: 1120px; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.7fr); gap: 18px; margin: 0 auto; }
+.radar-queue,
+.field-health { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--white); }
+.radar-alert { display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: 11px; width: calc(100% - 14px); margin: 7px; padding: 12px; border: 0; border-radius: 11px; background: transparent; text-align: left; cursor: pointer; }
+.radar-alert + .radar-alert { border-top: 1px solid var(--line); }
+.radar-alert:hover { background: var(--coral-pale); }
+.alert-pulse { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: var(--coral-pale); color: var(--coral); font-family: "Geist Mono", monospace; font-weight: 750; }
+.radar-alert strong,
+.radar-alert small { display: block; }
+.radar-alert strong { font-size: 10px; }
+.radar-alert small { margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.field-health { padding-bottom: 12px; }
+.field-health-row { display: grid; grid-template-columns: 72px 1fr 22px; align-items: center; gap: 9px; padding: 9px 18px; }
+.field-health-row > span { color: var(--muted); font-size: 8px; }
+.field-health-row > div { height: 5px; overflow: hidden; border-radius: 8px; background: var(--cobalt-pale); }
+.field-health-row > div i { display: block; height: 100%; border-radius: inherit; background: var(--coral); }
+.field-health-row strong { justify-self: end; font-family: "Geist Mono", monospace; font-size: 9px; }
+@keyframes radar-ping { 0%, 100% { transform: scale(0.86); opacity: 0.75; } 50% { transform: scale(1.12); opacity: 1; } }
+
 .directory-avatar {
   display: grid;
   place-items: center;
@@ -1010,6 +1068,8 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 [data-theme="dark"] .directory-card { background: #0f1728; }
 [data-theme="dark"] .trust-strip { background: linear-gradient(120deg, #121a2c, #172142); }
 [data-theme="dark"] .trust-level { background: rgba(13, 20, 37, 0.72); }
+[data-theme="dark"] .radar-scope { background: radial-gradient(circle at 50% 45%, #202a50, #121a2c 68%); }
+[data-theme="dark"] .radar-orbit > div { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28); }
 
 @media (max-width: 1050px) {
   .theme-toggle { display: grid; grid-template-columns: 1fr; place-items: center; padding: 9px; }
@@ -1019,6 +1079,8 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 
 @media (max-width: 900px) {
   .trust-strip { grid-template-columns: 1fr; }
+  .radar-dashboard,
+  .radar-columns { grid-template-columns: 1fr; }
   .source-grid { grid-template-columns: 1fr; }
   .event-row { grid-template-columns: 55px 3px 1fr 70px 24px; }
   .event-row .case-badge { display: none; }
@@ -1037,4 +1099,13 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
   .trust-scale { grid-template-columns: 1fr; }
   .trust-arrow { justify-self: center; transform: rotate(90deg); }
   .directory-card { grid-template-columns: 34px 1fr auto; }
+  .radar-dashboard { grid-template-columns: 1fr; }
+  .radar-metrics { grid-template-columns: 1fr; }
+  .radar-metrics article:last-child { grid-column: auto; }
+  .radar-scope { min-height: 280px; }
+  .radar-orbit { width: 205px; height: 205px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-orbit > i { animation: none; }
 }

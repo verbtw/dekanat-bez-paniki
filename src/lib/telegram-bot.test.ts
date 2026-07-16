@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { demoItems } from "./demo-data";
 import {
   buildTelegramEventKeyboard,
+  buildTelegramConflictsText,
+  buildTelegramDuplicateText,
   buildTelegramEventsText,
   buildTelegramHelpText,
   parseConfirmCallback,
@@ -12,8 +14,15 @@ describe("Telegram bot commands", () => {
   it("parses supported commands including commands addressed to the bot", () => {
     expect(parseTelegramCommand("/start")).toBe("start");
     expect(parseTelegramCommand("/events@dekanat_panic_test_bot now")).toBe("events");
+    expect(parseTelegramCommand("/conflicts")).toBe("conflicts");
     expect(parseTelegramCommand("/wat")).toBe("unknown");
     expect(parseTelegramCommand("Перенесли пару")).toBeNull();
+  });
+
+  it("formats the conflict queue and duplicate response", () => {
+    expect(buildTelegramConflictsText(demoItems)).toContain("Противоречия");
+    expect(buildTelegramConflictsText(demoItems.filter((item) => item.status !== "conflict"))).toContain("нет");
+    expect(buildTelegramDuplicateText(demoItems[0])).toContain("Новую карточку не создавал");
   });
 
   it("builds useful help and an empty events state", () => {

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import type { ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
+import type { EvidenceSource, ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
 import { getDb } from "./client";
 import {
   eventActivities,
@@ -46,7 +46,7 @@ function toInboxItem(
     })),
     activity: activity.map((entry) => ({
       id: entry.id,
-      action: entry.action as "created" | "edited" | "status_changed",
+      action: entry.action as "created" | "edited" | "status_changed" | "source_added",
       actor: entry.actor,
       details: entry.details,
       createdAt: entry.createdAt.toISOString(),
@@ -315,4 +315,44 @@ export async function deleteEvent(id: string, groupId: string) {
     .where(and(eq(events.id, id), eq(events.groupId, groupId)))
     .returning({ id: events.id });
   return deleted ?? null;
+}
+
+export async function appendSourceToEvent(
+  eventId: string,
+  source: EvidenceSource,
+  groupId: string,
+) {
+  const db = getDb();
+  const [event] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.id, eventId), eq(events.groupId, groupId)))
+    .limit(1);
+  if (!event) return null;
+
+  const sourceQuery = db
+    .insert(sources)
+    .values({
+      id: source.id,
+      eventId,
+      author: source.author,
+      role: source.role,
+      kind: source.kind,
+      text: source.text,
+      sourceTime: source.time,
+      chat: source.chat,
+    })
+    .onConflictDoNothing({ target: sources.id });
+  const activityQuery = db
+    .insert(eventActivities)
+    .values({
+      id: `source:${source.id}`,
+      eventId,
+      action: "source_added",
+      actor: source.author,
+      details: { source: source.text },
+    })
+    .onConflictDoNothing({ target: eventActivities.id });
+  await db.batch([sourceQuery, activityQuery]);
+  return event;
 }

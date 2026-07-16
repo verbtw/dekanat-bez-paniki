@@ -41,6 +41,7 @@ const commandsResponse = await fetch(`https://api.telegram.org/bot${token}/setMy
     commands: [
       { command: "start", description: "Как пользоваться ботом" },
       { command: "events", description: "Последние события этого чата" },
+      { command: "conflicts", description: "Активные противоречия" },
       { command: "status", description: "Состояние бота и базы" },
       { command: "help", description: "Показать подсказку" },
     ],

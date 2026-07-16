@@ -1,13 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { buildCalendarEvent, calendarFilename } from "@/lib/calendar";
+import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
 import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
 import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
 
 const navItems = [
   { id: "inbox", icon: "↙", label: "Входящие" },
+  { id: "radar", icon: "◉", label: "Радар" },
   { id: "events", icon: "□", label: "События" },
   { id: "sources", icon: "⌁", label: "Источники" },
 ] as const;
@@ -131,6 +133,7 @@ function eventSummary(item: InboxItem) {
 function activityLabel(action: NonNullable<InboxItem["activity"]>[number]["action"]) {
   if (action === "edited") return "Поля исправлены";
   if (action === "status_changed") return "Статус изменён";
+  if (action === "source_added") return "Добавлен источник";
   return "Событие создано";
 }
 
@@ -252,6 +255,80 @@ function SourcesView({ items }: { items: InboxItem[] }) {
             <div className="empty-state"><span>⌁</span><strong>Источников пока нет</strong><p>Первое распознанное сообщение появится здесь.</p></div>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function RadarView({ items, onOpen }: { items: InboxItem[]; onOpen: (id: string) => void }) {
+  const conflicts = items.filter((item) => item.status === "conflict");
+  const pending = items.filter((item) => item.status === "review");
+  const known = (value: string) => !value.toLowerCase().includes("не найден") && !value.toLowerCase().includes("не определён");
+  const fieldIssues = [
+    { key: "date", label: "Дата", count: items.filter((item) => !known(item.event.date)).length },
+    { key: "time", label: "Время", count: items.filter((item) => !known(item.event.time)).length },
+    { key: "room", label: "Аудитория", count: items.filter((item) => !known(item.event.room)).length },
+    { key: "subject", label: "Предмет", count: items.filter((item) => !known(item.event.subject)).length },
+  ];
+  const totalFields = Math.max(items.length * fieldIssues.length, 1);
+  const completeness = Math.round((1 - fieldIssues.reduce((sum, field) => sum + field.count, 0) / totalFields) * 100);
+  const roleWeight: Record<SourceRole, number> = { teacher: 100, "group-lead": 78, student: 52 };
+  const allSources = items.flatMap((item) => item.sources);
+  const trust = allSources.length
+    ? Math.round(allSources.reduce((sum, source) => sum + roleWeight[source.role], 0) / allSources.length)
+    : 0;
+
+  return (
+    <section className="workspace-view radar-view">
+      <header className="workspace-header">
+        <div>
+          <span className="eyebrow">Контроль расхождений</span>
+          <h1>Радар</h1>
+          <p>Система сравнивает новые сообщения с историей группы и показывает, где факты не сходятся.</p>
+        </div>
+        <span className={conflicts.length ? "radar-state warning" : "radar-state safe"}><i /> {conflicts.length ? `${conflicts.length} требуют решения` : "расхождений нет"}</span>
+      </header>
+
+      <div className="radar-dashboard">
+        <article className="radar-scope">
+          <div className="radar-orbit" aria-label={`${conflicts.length} активных противоречий`}>
+            <span className="orbit-ring ring-one" />
+            <span className="orbit-ring ring-two" />
+            <span className="orbit-ring ring-three" />
+            {conflicts.slice(0, 4).map((item, index) => <i key={item.id} style={{ "--signal-index": index } as CSSProperties} />)}
+            <div><strong>{conflicts.length}</strong><span>активных<br />сигналов</span></div>
+          </div>
+          <footer><span><i className="risk-dot" /> конфликт</span><span><i className="review-dot" /> проверка</span></footer>
+        </article>
+
+        <div className="radar-metrics">
+          <article><span>Полнота данных</span><strong>{completeness}%</strong><div><i style={{ width: `${completeness}%` }} /></div><small>заполнены ключевые поля</small></article>
+          <article><span>Доверие источников</span><strong>{trust}%</strong><div><i style={{ width: `${trust}%` }} /></div><small>с учётом ролей авторов</small></article>
+          <article><span>Ждут проверки</span><strong>{pending.length}</strong><small>можно подтвердить вручную</small></article>
+        </div>
+      </div>
+
+      <div className="radar-columns">
+        <section className="radar-queue">
+          <div className="calendar-heading"><div><span className="eyebrow">Очередь решений</span><h2>Что проверить сейчас</h2></div></div>
+          {conflicts.map((item) => (
+            <button className="radar-alert" key={item.id} onClick={() => onOpen(item.id)}>
+              <span className="alert-pulse">!</span>
+              <span><strong>{item.event.title}</strong><small>{item.reason}</small></span>
+              <span className="row-arrow">→</span>
+            </button>
+          ))}
+          {conflicts.length === 0 && <div className="empty-state"><span>✓</span><strong>Очередь чиста</strong><p>Новые противоречия появятся здесь автоматически.</p></div>}
+        </section>
+
+        <section className="field-health">
+          <div className="calendar-heading"><div><span className="eyebrow">Качество извлечения</span><h2>Пробелы в данных</h2></div></div>
+          {fieldIssues.map((field) => (
+            <div className="field-health-row" key={field.key}>
+              <span>{field.label}</span><div><i style={{ width: `${items.length ? (field.count / items.length) * 100 : 0}%` }} /></div><strong>{field.count}</strong>
+            </div>
+          ))}
+        </section>
       </div>
     </section>
   );
@@ -403,6 +480,7 @@ export function EvidenceDesk() {
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const navCounts: Record<NavId, number> = {
     inbox: items.length,
+    radar: items.filter((item) => item.status === "conflict").length,
     events: items.length,
     sources: items.reduce((total, item) => total + item.sources.length, 0),
   };
@@ -608,12 +686,29 @@ export function EvidenceDesk() {
       ],
     };
 
-    setItems((current) => {
-      const next = [item, ...current];
-      saveWorkspace(next, workspaceToken);
-      return next;
-    });
-    setSelectedId(id);
+    const assessment = assessEventConflict(item, items);
+    const assessedItem = applyConflictAssessment(item, assessment);
+    if (assessment.kind === "duplicate") {
+      setItems((current) => current.map((existing) =>
+        existing.id === assessment.matchedId
+          ? {
+              ...existing,
+              sources: [...existing.sources, item.sources[0]],
+              activity: [{
+                id: `local-source:${item.sources[0].id}`,
+                action: "source_added" as const,
+                actor: item.sources[0].author,
+                details: { source: item.sources[0].text },
+                createdAt: new Date().toISOString(),
+              }, ...(existing.activity ?? [])],
+            }
+          : existing,
+      ));
+      setSelectedId(assessment.matchedId);
+    } else {
+      setItems((current) => [assessedItem, ...current]);
+      setSelectedId(id);
+    }
     setNewMessage("");
     setComposerOpen(false);
     void pushEventToServer(item, workspaceToken).then((synced) => {
@@ -624,7 +719,13 @@ export function EvidenceDesk() {
         setSyncError("Новое событие сохранено локально и ждёт синхронизации");
       }
     });
-    flash("Сообщение распознано");
+    flash(
+      assessment.kind === "duplicate"
+        ? "Источник добавлен к существующей карточке"
+        : assessment.kind === "conflict"
+          ? "Найдено противоречие — открой радар"
+          : "Сообщение распознано",
+    );
   }
 
   return (
@@ -878,7 +979,7 @@ export function EvidenceDesk() {
                 createdAt: "Исходное сообщение",
               }]).map((entry) => (
                 <article className={`activity-entry ${entry.action}`} key={entry.id}>
-                  <span className="activity-mark">{entry.action === "edited" ? "✎" : entry.action === "status_changed" ? "✓" : "＋"}</span>
+                  <span className="activity-mark">{entry.action === "edited" ? "✎" : entry.action === "status_changed" ? "✓" : entry.action === "source_added" ? "⌁" : "＋"}</span>
                   <div>
                     <strong>{activityLabel(entry.action)}</strong>
                     <p>{Object.values(entry.details).slice(0, 2).join(" · ") || "Карточка добавлена в поток группы"}</p>
@@ -914,6 +1015,8 @@ export function EvidenceDesk() {
         </section>
       )}
         </>
+      ) : activeNav === "radar" ? (
+        <RadarView items={items} onOpen={openEvent} />
       ) : activeNav === "events" ? (
         <EventsView
           items={items}

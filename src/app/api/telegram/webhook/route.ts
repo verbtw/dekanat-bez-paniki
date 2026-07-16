@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import { findGroupById, listEvents, saveEvent, updateEventStatus } from "@/db/repository";
+import {
+  appendSourceToEvent,
+  findGroupById,
+  listEvents,
+  saveEvent,
+  updateEventStatus,
+} from "@/db/repository";
+import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
 import { extractEvent } from "@/lib/extract-event";
 import {
   buildTelegramEventKeyboard,
   buildTelegramEventText,
+  buildTelegramConflictsText,
+  buildTelegramDuplicateText,
   buildTelegramEventsText,
   buildTelegramHelpText,
   buildTelegramStatusText,
@@ -157,7 +166,10 @@ export async function POST(request: NextRequest) {
       replyText = "🟡 База пока не подключена, список событий недоступен.";
     } else {
       try {
-        replyText = buildTelegramEventsText(await listEvents(`telegram:${chatId}`));
+        const items = await listEvents(`telegram:${chatId}`);
+        replyText = command === "conflicts"
+          ? buildTelegramConflictsText(items)
+          : buildTelegramEventsText(items);
       } catch {
         replyText = "Не удалось загрузить события. Попробуй ещё раз чуть позже.";
       }
@@ -175,16 +187,31 @@ export async function POST(request: NextRequest) {
   }
 
   let stored = false;
+  let merged = false;
+  let storedItem = item;
   let workspaceToken: string | null = null;
   if (isDatabaseConfigured()) {
     const groupId = `telegram:${chatId}`;
     try {
-      const group = await saveEvent(item, groupId, {
-        name: update.message?.chat?.title || "Telegram",
-        telegramChatId: String(chatId),
-      });
+      const existing = await listEvents(groupId);
+      const assessment = assessEventConflict(item, existing);
+      let group;
+      if (assessment.kind === "duplicate") {
+        const matched = existing.find((candidate) => candidate.id === assessment.matchedId);
+        if (!matched) throw new Error("MATCHED_EVENT_NOT_FOUND");
+        await appendSourceToEvent(matched.id, item.sources[0], groupId);
+        storedItem = { ...matched, sources: [...matched.sources, item.sources[0]] };
+        merged = true;
+        group = await findGroupById(groupId);
+      } else {
+        storedItem = applyConflictAssessment(item, assessment);
+        group = await saveEvent(storedItem, groupId, {
+          name: update.message?.chat?.title || "Telegram",
+          telegramChatId: String(chatId),
+        });
+      }
       stored = true;
-      workspaceToken = group.accessToken;
+      workspaceToken = group?.accessToken ?? null;
     } catch {
       return NextResponse.json({ ok: false, code: "DATABASE_WRITE_FAILED" }, { status: 500 });
     }
@@ -192,11 +219,11 @@ export async function POST(request: NextRequest) {
 
   const reply = await sendTelegramMessage(
     String(chatId),
-    buildTelegramEventText(item, stored),
+    merged ? buildTelegramDuplicateText(storedItem) : buildTelegramEventText(storedItem, stored),
     {
       replyToMessageId: messageId,
       replyMarkup: buildTelegramEventKeyboard(
-        item,
+        storedItem,
         stored,
         workspaceToken ? `${appUrl}?workspace=${encodeURIComponent(workspaceToken)}` : appUrl,
       ),
@@ -205,7 +232,13 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    accepted: { id: item.id, stored, confidence: item.event.confidence },
+    accepted: {
+      id: storedItem.id,
+      stored,
+      merged,
+      status: storedItem.status,
+      confidence: storedItem.event.confidence,
+    },
     replySent: reply.sent,
   });
 }

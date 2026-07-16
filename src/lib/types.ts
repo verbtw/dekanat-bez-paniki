@@ -1,7 +1,7 @@
 export type SourceKind = "message" | "voice" | "image" | "document";
 export type SourceRole = "teacher" | "group-lead" | "student";
 export type ReviewStatus = "confirmed" | "review" | "conflict";
-export type ActivityAction = "created" | "edited" | "status_changed";
+export type ActivityAction = "created" | "edited" | "status_changed" | "source_added";
 
 export type EvidenceSource = {
   id: string;

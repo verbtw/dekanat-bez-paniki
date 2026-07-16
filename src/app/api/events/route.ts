@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DatabaseNotConfiguredError, isDatabaseConfigured } from "@/db/client";
-import { demoGroupId, findGroupByAccessToken, listEvents, saveEvent } from "@/db/repository";
+import {
+  appendSourceToEvent,
+  demoGroupId,
+  findGroupByAccessToken,
+  listEvents,
+  saveEvent,
+} from "@/db/repository";
+import { applyConflictAssessment, assessEventConflict } from "@/lib/conflict-detector";
 import { inboxItemSchema } from "@/lib/event-validation";
 
 export async function GET(request: NextRequest) {
@@ -64,8 +71,20 @@ export async function POST(request: NextRequest) {
       );
     }
     const groupId = group?.id ?? demoGroupId;
-    await saveEvent(parsed.data, groupId);
-    return NextResponse.json({ saved: true, item: parsed.data }, { status: 201 });
+    const existing = await listEvents(groupId);
+    const assessment = assessEventConflict(parsed.data, existing);
+    if (assessment.kind === "duplicate") {
+      await appendSourceToEvent(assessment.matchedId, parsed.data.sources[0], groupId);
+      return NextResponse.json({
+        saved: true,
+        merged: true,
+        itemId: assessment.matchedId,
+        assessment,
+      });
+    }
+    const item = applyConflictAssessment(parsed.data, assessment);
+    await saveEvent(item, groupId);
+    return NextResponse.json({ saved: true, item, assessment }, { status: 201 });
   } catch (error) {
     const notConfigured = error instanceof DatabaseNotConfiguredError;
     return NextResponse.json(

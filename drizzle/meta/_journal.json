@@ -15,6 +15,13 @@
       "when": 1784150549935,
       "tag": "0001_rainy_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784174917852,
+      "tag": "0002_gray_energizer",
+      "breakpoints": true
     }
   ]
 }

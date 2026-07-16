@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { buildCalendarEvent, calendarFilename } from "@/lib/calendar";
 import { demoItems } from "@/lib/demo-data";
 import { extractEvent } from "@/lib/extract-event";
-import type { InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
+import type { ExtractedEvent, InboxItem, ReviewStatus, SourceKind, SourceRole } from "@/lib/types";
 
 const navItems = [
   { id: "inbox", icon: "↙", label: "Входящие" },
@@ -15,6 +16,7 @@ type NavId = (typeof navItems)[number]["id"];
 type Theme = "light" | "dark";
 type StorageMode = "checking" | "local" | "database";
 type InboxFilter = "all" | "attention";
+type EditableEvent = Pick<ExtractedEvent, "title" | "subject" | "date" | "time" | "room">;
 
 const workspaceStorageKey = "dbp:workspace:v1";
 function getWorkspaceStorageKey(workspace: string) {
@@ -52,6 +54,31 @@ async function pushStatusToServer(id: string, status: ReviewStatus, workspace: s
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status, workspace }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function pushEventEditToServer(id: string, event: EditableEvent, workspace: string) {
+  try {
+    const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event, workspace }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteEventFromServer(id: string, workspace: string) {
+  try {
+    const suffix = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
+    const response = await fetch(`/api/events/${encodeURIComponent(id)}${suffix}`, {
+      method: "DELETE",
     });
     return response.ok;
   } catch {
@@ -99,6 +126,23 @@ function eventSummary(item: InboxItem) {
     `Статус: ${statusLabel[item.status]}`,
     `Источник: ${item.sources[0]?.text ?? "не указан"}`,
   ].join("\n");
+}
+
+function activityLabel(action: NonNullable<InboxItem["activity"]>[number]["action"]) {
+  if (action === "edited") return "Поля исправлены";
+  if (action === "status_changed") return "Статус изменён";
+  return "Событие создано";
+}
+
+function activityTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function EventsView({
@@ -221,8 +265,11 @@ export function EvidenceDesk() {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [composerOpen, setComposerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
+  const [editDraft, setEditDraft] = useState<EditableEvent | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
   const [workspaceToken, setWorkspaceToken] = useState("");
@@ -284,6 +331,8 @@ export function EvidenceDesk() {
       if (event.key === "Escape") {
         setComposerOpen(false);
         setSettingsOpen(false);
+        setEditOpen(false);
+        setDeleteOpen(false);
         setActionMenuOpen(false);
       }
     };
@@ -380,7 +429,22 @@ export function EvidenceDesk() {
     if (!selected) return;
     setItems((current) => {
       const next = current.map((item) =>
-        item.id === selected.id ? { ...item, status } : item,
+        item.id === selected.id
+          ? {
+              ...item,
+              status,
+              activity: [
+                {
+                  id: `local-status:${Date.now()}`,
+                  action: "status_changed" as const,
+                  actor: "Вы",
+                  details: { from: item.status, to: status },
+                  createdAt: new Date().toISOString(),
+                },
+                ...(item.activity ?? []),
+              ],
+            }
+          : item,
       );
       saveWorkspace(next, workspaceToken);
       return next;
@@ -429,6 +493,88 @@ export function EvidenceDesk() {
 
   async function copyWorkspaceLink() {
     await copyText(window.location.href, "Ссылка на рабочее пространство скопирована");
+  }
+
+  function openEditor() {
+    if (!selected) return;
+    setEditDraft({
+      title: selected.event.title,
+      subject: selected.event.subject,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(selected.event.date) ? selected.event.date : "",
+      time: /^\d{2}:\d{2}$/.test(selected.event.time) ? selected.event.time : "",
+      room: selected.event.room === "Аудитория не найдена" ? "" : selected.event.room,
+    });
+    setActionMenuOpen(false);
+    setEditOpen(true);
+  }
+
+  function saveEditedEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !editDraft) return;
+    const nextEvent = { ...editDraft, confidence: 100 };
+    const activityDetails = Object.fromEntries(
+      (Object.keys(editDraft) as Array<keyof EditableEvent>)
+        .filter((key) => selected.event[key] !== editDraft[key])
+        .map((key) => [key, `${selected.event[key]} → ${editDraft[key]}`]),
+    );
+    setItems((current) => current.map((item) =>
+      item.id === selected.id
+        ? {
+            ...item,
+            event: nextEvent,
+            status: "review",
+            reason: "Поля исправлены вручную. Подтвердите событие перед публикацией.",
+            activity: Object.keys(activityDetails).length
+              ? [{
+                  id: `local-edit:${Date.now()}`,
+                  action: "edited" as const,
+                  actor: "Вы",
+                  details: activityDetails,
+                  createdAt: new Date().toISOString(),
+                }, ...(item.activity ?? [])]
+              : item.activity,
+          }
+        : item,
+    ));
+    setEditOpen(false);
+    void pushEventEditToServer(selected.id, editDraft, workspaceToken).then((synced) => {
+      if (synced) {
+        setStorageMode("database");
+        setSyncError(null);
+      } else {
+        setSyncError("Исправления сохранены локально и ждут синхронизации");
+      }
+    });
+    flash("Исправления сохранены — проверь событие");
+  }
+
+  function exportCalendar() {
+    if (!selected) return;
+    const content = buildCalendarEvent(selected);
+    setActionMenuOpen(false);
+    if (!content) {
+      flash("Сначала укажи точную дату и время");
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([content], { type: "text/calendar;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = calendarFilename(selected);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    flash("Файл календаря подготовлен");
+  }
+
+  function confirmDeleteEvent() {
+    if (!selected) return;
+    const deletingId = selected.id;
+    setItems((current) => current.filter((item) => item.id !== deletingId));
+    setDeleteOpen(false);
+    setActionMenuOpen(false);
+    void deleteEventFromServer(deletingId, workspaceToken).then((synced) => {
+      if (!synced) setSyncError("Удаление сохранено локально, но сервер пока недоступен");
+    });
+    flash("Карточка удалена");
   }
 
   function addMessage(event: FormEvent<HTMLFormElement>) {
@@ -639,8 +785,14 @@ export function EvidenceDesk() {
             >•••</button>
             {actionMenuOpen && (
               <div className="action-menu">
+                <button onClick={openEditor}>Исправить поля</button>
+                <button onClick={exportCalendar}>Добавить в календарь</button>
                 <button onClick={() => void copyText(eventSummary(selected), "Карточка скопирована")}>Копировать карточку</button>
                 <button onClick={addSimilarMessage}>Добавить похожее</button>
+                <button className="danger-action" onClick={() => {
+                  setActionMenuOpen(false);
+                  setDeleteOpen(true);
+                }}>Удалить карточку</button>
               </div>
             )}
           </div>
@@ -708,6 +860,34 @@ export function EvidenceDesk() {
               ))}
             </div>
           </section>
+
+          <section className="activity-section">
+            <div className="section-title">
+              <div>
+                <span className="eyebrow">След дела</span>
+                <h3>Журнал решений</h3>
+              </div>
+              <span className="audit-seal">история сохранена</span>
+            </div>
+            <div className="activity-ledger">
+              {(selected.activity?.length ? selected.activity : [{
+                id: `source:${selected.id}`,
+                action: "created" as const,
+                actor: selected.sources[0]?.author ?? "Система",
+                details: { title: selected.event.title },
+                createdAt: "Исходное сообщение",
+              }]).map((entry) => (
+                <article className={`activity-entry ${entry.action}`} key={entry.id}>
+                  <span className="activity-mark">{entry.action === "edited" ? "✎" : entry.action === "status_changed" ? "✓" : "＋"}</span>
+                  <div>
+                    <strong>{activityLabel(entry.action)}</strong>
+                    <p>{Object.values(entry.details).slice(0, 2).join(" · ") || "Карточка добавлена в поток группы"}</p>
+                  </div>
+                  <footer><span>{entry.actor}</span><time>{activityTime(entry.createdAt)}</time></footer>
+                </article>
+              ))}
+            </div>
+          </section>
         </div>
 
         <footer className="decision-bar">
@@ -762,6 +942,44 @@ export function EvidenceDesk() {
             <div className="settings-actions">
               <button className="secondary-button" type="button" onClick={() => void copyWorkspaceLink()}>Копировать ссылку</button>
               <a className="primary-button" href="https://t.me/dekanat_panic_test_bot" target="_blank" rel="noreferrer">Открыть бота ↗</a>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {editOpen && editDraft && selected && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditOpen(false)}>
+          <form className="composer edit-dialog" onSubmit={saveEditedEvent} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="composer-heading">
+              <div>
+                <span className="eyebrow">Ручная проверка</span>
+                <h2>Исправить событие</h2>
+              </div>
+              <button type="button" onClick={() => setEditOpen(false)} aria-label="Закрыть">×</button>
+            </div>
+            <p>Исправления попадут в журнал решений. После сохранения событие нужно подтвердить ещё раз.</p>
+            <div className="edit-grid">
+              <label className="wide-field"><span>Название</span><input required maxLength={240} value={editDraft.title} onChange={(event) => setEditDraft({ ...editDraft, title: event.target.value })} /></label>
+              <label className="wide-field"><span>Предмет</span><input required maxLength={160} value={editDraft.subject} onChange={(event) => setEditDraft({ ...editDraft, subject: event.target.value })} /></label>
+              <label><span>Дата</span><input required type="date" value={editDraft.date} onChange={(event) => setEditDraft({ ...editDraft, date: event.target.value })} /></label>
+              <label><span>Время</span><input required type="time" value={editDraft.time} onChange={(event) => setEditDraft({ ...editDraft, time: event.target.value })} /></label>
+              <label className="wide-field"><span>Аудитория</span><input required maxLength={120} value={editDraft.room} onChange={(event) => setEditDraft({ ...editDraft, room: event.target.value })} /></label>
+            </div>
+            <button className="primary-button wide" type="submit">Сохранить исправления <span>→</span></button>
+          </form>
+        </div>
+      )}
+
+      {deleteOpen && selected && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteOpen(false)}>
+          <section className="composer delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="delete-symbol">×</div>
+            <span className="eyebrow">Необратимое действие</span>
+            <h2 id="delete-title">Удалить «{selected.event.title}»?</h2>
+            <p>Карточка и её источники исчезнут из рабочего пространства. Сообщение в Telegram останется.</p>
+            <div className="delete-actions">
+              <button className="secondary-button" type="button" onClick={() => setDeleteOpen(false)}>Оставить</button>
+              <button className="danger-button" type="button" onClick={confirmDeleteEvent}>Удалить карточку</button>
             </div>
           </section>
         </div>

@@ -74,6 +74,23 @@ export const sources = pgTable(
   (table) => [index("sources_event_id_idx").on(table.eventId)],
 );
 
+export const eventActivities = pgTable(
+  "event_activities",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    actor: text("actor").notNull(),
+    details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("event_activities_event_id_idx").on(table.eventId)],
+);
+
 export const groupsRelations = relations(groups, ({ many }) => ({
   events: many(events),
 }));
@@ -81,11 +98,17 @@ export const groupsRelations = relations(groups, ({ many }) => ({
 export const eventsRelations = relations(events, ({ one, many }) => ({
   group: one(groups, { fields: [events.groupId], references: [groups.id] }),
   sources: many(sources),
+  activity: many(eventActivities),
 }));
 
 export const sourcesRelations = relations(sources, ({ one }) => ({
   event: one(events, { fields: [sources.eventId], references: [events.id] }),
 }));
 
+export const eventActivitiesRelations = relations(eventActivities, ({ one }) => ({
+  event: one(events, { fields: [eventActivities.eventId], references: [events.id] }),
+}));
+
 export type EventRow = typeof events.$inferSelect;
 export type SourceRow = typeof sources.$inferSelect;
+export type EventActivityRow = typeof eventActivities.$inferSelect;

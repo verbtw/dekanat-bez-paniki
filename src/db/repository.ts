@@ -1,11 +1,23 @@
-import { and, asc, eq, sql } from "drizzle-orm";
-import type { InboxItem, ReviewStatus } from "@/lib/types";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { ExtractedEvent, InboxItem, ReviewStatus } from "@/lib/types";
 import { getDb } from "./client";
-import { events, groups, sources, type EventRow, type SourceRow } from "./schema";
+import {
+  eventActivities,
+  events,
+  groups,
+  sources,
+  type EventActivityRow,
+  type EventRow,
+  type SourceRow,
+} from "./schema";
 
 export const demoGroupId = "demo:ivt-101";
 
-function toInboxItem(event: EventRow, eventSources: SourceRow[]): InboxItem {
+function toInboxItem(
+  event: EventRow,
+  eventSources: SourceRow[],
+  activity: EventActivityRow[],
+): InboxItem {
   return {
     id: event.id,
     status: event.status,
@@ -31,6 +43,13 @@ function toInboxItem(event: EventRow, eventSources: SourceRow[]): InboxItem {
       text: source.text,
       time: source.sourceTime,
       chat: source.chat,
+    })),
+    activity: activity.map((entry) => ({
+      id: entry.id,
+      action: entry.action as "created" | "edited" | "status_changed",
+      actor: entry.actor,
+      details: entry.details,
+      createdAt: entry.createdAt.toISOString(),
     })),
   };
 }
@@ -79,13 +98,19 @@ export async function findGroupById(id: string) {
 
 export async function listEvents(groupId = demoGroupId): Promise<InboxItem[]> {
   const db = getDb();
-  const [eventRows, sourceRows] = await Promise.all([
+  const [eventRows, sourceRows, activityRows] = await Promise.all([
     db.select().from(events).where(eq(events.groupId, groupId)).orderBy(asc(events.eventDate)),
     db
       .select({ source: sources })
       .from(sources)
       .innerJoin(events, eq(sources.eventId, events.id))
       .where(eq(events.groupId, groupId)),
+    db
+      .select({ activity: eventActivities })
+      .from(eventActivities)
+      .innerJoin(events, eq(eventActivities.eventId, events.id))
+      .where(eq(events.groupId, groupId))
+      .orderBy(desc(eventActivities.createdAt)),
   ]);
 
   const sourcesByEvent = new Map<string, SourceRow[]>();
@@ -95,7 +120,20 @@ export async function listEvents(groupId = demoGroupId): Promise<InboxItem[]> {
     sourcesByEvent.set(source.eventId, current);
   }
 
-  return eventRows.map((event) => toInboxItem(event, sourcesByEvent.get(event.id) ?? []));
+  const activityByEvent = new Map<string, EventActivityRow[]>();
+  for (const { activity } of activityRows) {
+    const current = activityByEvent.get(activity.eventId) ?? [];
+    current.push(activity);
+    activityByEvent.set(activity.eventId, current);
+  }
+
+  return eventRows.map((event) =>
+    toInboxItem(
+      event,
+      sourcesByEvent.get(event.id) ?? [],
+      activityByEvent.get(event.id) ?? [],
+    ),
+  );
 }
 
 export async function saveEvent(
@@ -171,16 +209,110 @@ export async function saveEvent(
       },
     });
 
-  await db.batch([eventUpsert, sourceUpsert]);
+  const creationActivity = db
+    .insert(eventActivities)
+    .values({
+      id: `created:${item.id}`,
+      eventId: item.id,
+      action: "created",
+      actor: item.sources[0]?.author ?? "Система",
+      details: { title: item.event.title },
+    })
+    .onConflictDoNothing({ target: eventActivities.id });
+
+  await db.batch([eventUpsert, sourceUpsert, creationActivity]);
   return savedGroup;
 }
 
 export async function updateEventStatus(id: string, status: ReviewStatus, groupId?: string) {
   const db = getDb();
-  const [updated] = await db
+  const where = groupId ? and(eq(events.id, id), eq(events.groupId, groupId)) : eq(events.id, id);
+  const [current] = await db
+    .select({ status: events.status })
+    .from(events)
+    .where(where)
+    .limit(1);
+  if (!current) return null;
+
+  const updateQuery = db
     .update(events)
     .set({ status, updatedAt: new Date() })
-    .where(groupId ? and(eq(events.id, id), eq(events.groupId, groupId)) : eq(events.id, id))
+    .where(where)
     .returning({ id: events.id, status: events.status });
-  return updated ?? null;
+  if (current.status === status) {
+    const [updated] = await updateQuery;
+    return updated ?? null;
+  }
+
+  const activityQuery = db.insert(eventActivities).values({
+    eventId: id,
+    action: "status_changed",
+    actor: "Участник группы",
+    details: { from: current.status, to: status },
+  });
+  const [updatedRows] = await db.batch([updateQuery, activityQuery]);
+  return updatedRows[0] ?? null;
+}
+
+export type EditableEventInput = Pick<ExtractedEvent, "title" | "subject" | "date" | "time" | "room">;
+
+export async function updateEventFields(
+  id: string,
+  input: EditableEventInput,
+  groupId: string,
+) {
+  const db = getDb();
+  const where = and(eq(events.id, id), eq(events.groupId, groupId));
+  const [current] = await db.select().from(events).where(where).limit(1);
+  if (!current) return null;
+
+  const before = {
+    title: current.title,
+    subject: current.subject,
+    date: current.eventDate,
+    time: current.eventTime,
+    room: current.room,
+  };
+  const changed = Object.entries(input).filter(
+    ([key, value]) => before[key as keyof typeof before] !== value,
+  );
+  if (changed.length === 0) {
+    return { id: current.id, event: { ...input, confidence: current.confidence }, status: current.status };
+  }
+
+  const updateQuery = db
+    .update(events)
+    .set({
+      title: input.title,
+      subject: input.subject,
+      eventDate: input.date,
+      eventTime: input.time,
+      room: input.room,
+      confidence: 100,
+      status: "review",
+      reason: "Поля исправлены вручную. Подтвердите событие перед публикацией.",
+      updatedAt: new Date(),
+    })
+    .where(where)
+    .returning({ id: events.id, status: events.status });
+  const activityQuery = db.insert(eventActivities).values({
+    eventId: id,
+    action: "edited",
+    actor: "Участник группы",
+    details: Object.fromEntries(changed.map(([key, value]) => [key, `${before[key as keyof typeof before]} → ${value}`])),
+  });
+  const [updatedRows] = await db.batch([updateQuery, activityQuery]);
+  const updated = updatedRows[0];
+  return updated
+    ? { id: updated.id, event: { ...input, confidence: 100 }, status: updated.status }
+    : null;
+}
+
+export async function deleteEvent(id: string, groupId: string) {
+  const db = getDb();
+  const [deleted] = await db
+    .delete(events)
+    .where(and(eq(events.id, id), eq(events.groupId, groupId)))
+    .returning({ id: events.id });
+  return deleted ?? null;
 }

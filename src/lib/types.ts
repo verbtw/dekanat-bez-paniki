@@ -1,6 +1,7 @@
 export type SourceKind = "message" | "voice" | "image" | "document";
 export type SourceRole = "teacher" | "group-lead" | "student";
 export type ReviewStatus = "confirmed" | "review" | "conflict";
+export type ActivityAction = "created" | "edited" | "status_changed";
 
 export type EvidenceSource = {
   id: string;
@@ -21,6 +22,14 @@ export type ExtractedEvent = {
   confidence: number;
 };
 
+export type EventActivity = {
+  id: string;
+  action: ActivityAction;
+  actor: string;
+  details: Record<string, string>;
+  createdAt: string;
+};
+
 export type InboxItem = {
   id: string;
   status: ReviewStatus;
@@ -28,4 +37,5 @@ export type InboxItem = {
   event: ExtractedEvent;
   sources: EvidenceSource[];
   reason: string;
+  activity?: EventActivity[];
 };

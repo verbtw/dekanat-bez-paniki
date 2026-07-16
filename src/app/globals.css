@@ -445,9 +445,10 @@ textarea:focus-visible {
 .header-actions { position: relative; display: flex; gap: 5px; }
 .header-actions button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #e2e5ed; border-radius: 8px; background: #fff; color: #737c90; cursor: pointer; }
 .header-actions button:hover { border-color: #c9cfdf; color: var(--ink); }
-.action-menu { position: absolute; top: 38px; right: 0; z-index: 8; width: 180px; overflow: hidden; padding: 5px; border: 1px solid #dfe3ed; border-radius: 11px; background: #fff; box-shadow: 0 14px 38px rgba(31, 41, 73, 0.16); }
+.action-menu { position: absolute; top: 38px; right: 0; z-index: 8; width: 192px; overflow: hidden; padding: 5px; border: 1px solid #dfe3ed; border-radius: 11px; background: #fff; box-shadow: 0 14px 38px rgba(31, 41, 73, 0.16); }
 .header-actions .action-menu button { display: block; width: 100%; height: auto; padding: 9px 10px; border: 0; background: transparent; text-align: left; font-size: 10px; }
 .header-actions .action-menu button:hover { background: #f3f5fa; }
+.header-actions .action-menu .danger-action { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0; color: var(--coral); }
 
 .evidence-scroll {
   overflow-y: auto;
@@ -527,6 +528,19 @@ textarea:focus-visible {
 .source-card footer { display: flex; align-items: center; justify-content: space-between; padding-top: 9px; border-top: 1px solid #eef0f4; color: #8b93a6; font-size: 8px; }
 .source-card footer b { color: var(--coral); font-weight: 650; }
 
+.activity-section { max-width: 740px; margin-top: 34px; }
+.audit-seal { padding: 5px 8px; border: 1px solid #c8d0f7; border-radius: 999px; color: var(--cobalt); font-family: "Geist Mono", monospace; font-size: 7px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; }
+.activity-ledger { overflow: hidden; border: 1px solid #dfe3ed; border-radius: 13px; background: linear-gradient(135deg, #fcfdff, #f8f9ff); }
+.activity-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px 15px; }
+.activity-entry + .activity-entry { border-top: 1px solid #e8eaf1; }
+.activity-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #d9def8; border-radius: 9px; background: var(--cobalt-pale); color: var(--cobalt); font-size: 11px; font-weight: 750; }
+.activity-entry.edited .activity-mark { border-color: #f2d8ad; background: var(--amber-pale); color: var(--amber); }
+.activity-entry.status_changed .activity-mark { border-color: #bee7db; background: var(--mint-pale); color: var(--mint); }
+.activity-entry strong { font-size: 10px; }
+.activity-entry p { margin: 3px 0 0; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.activity-entry footer { display: grid; justify-items: end; gap: 3px; color: var(--muted); font-size: 8px; }
+.activity-entry footer time { font-family: "Geist Mono", monospace; font-size: 7px; }
+
 .decision-bar {
   display: flex;
   align-items: center;
@@ -587,6 +601,19 @@ textarea:focus-visible {
 .settings-status small { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.4; }
 .settings-actions { display: flex; gap: 9px; }
 .settings-actions > * { flex: 1; }
+.edit-dialog { width: min(560px, 100%); }
+.edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+.edit-grid label { display: grid; gap: 6px; }
+.edit-grid .wide-field { grid-column: 1 / -1; }
+.edit-grid label > span { color: var(--muted); font-size: 8px; font-weight: 650; }
+.edit-grid input { min-width: 0; width: 100%; padding: 10px 11px; border: 1px solid #d9deeb; border-radius: 9px; background: #fbfcff; color: var(--ink); font-size: 11px; outline: 0; }
+.edit-grid input:focus { border-color: var(--cobalt); box-shadow: 0 0 0 3px var(--cobalt-pale); }
+.delete-dialog { width: min(430px, 100%); text-align: center; }
+.delete-symbol { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 15px; border-radius: 13px; background: var(--coral-pale); color: var(--coral); font-size: 23px; }
+.delete-dialog h2 { margin: 8px 0 0; font-size: 21px; letter-spacing: -0.04em; }
+.delete-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 20px; }
+.danger-button { padding: 10px 14px; border: 0; border-radius: 9px; background: var(--coral); color: #fff; font-size: 10px; font-weight: 680; cursor: pointer; }
+.danger-button:hover { filter: brightness(0.92); }
 
 button:focus-visible,
 a:focus-visible,
@@ -642,6 +669,10 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
   .rail-node { left: -36px; }
   .source-meta > div { align-items: flex-start; flex-direction: column; gap: 3px; }
   .source-card footer b { display: none; }
+  .activity-entry { grid-template-columns: 32px minmax(0, 1fr); }
+  .activity-entry footer { grid-column: 2; justify-items: start; grid-auto-flow: column; }
+  .edit-grid { grid-template-columns: 1fr; }
+  .edit-grid .wide-field { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -961,12 +992,14 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 [data-theme="dark"] .mini-avatars i:nth-child(2) { background: #4a2929; color: #ffb4a8; }
 [data-theme="dark"] .result-card { background: linear-gradient(135deg, #151e34, #111a2f); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14); }
 [data-theme="dark"] .source-card { background: #151e31; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
+[data-theme="dark"] .activity-ledger { border-color: var(--line); background: linear-gradient(135deg, #151e31, #11192c); }
 [data-theme="dark"] .rail-node { border-color: #121a2c; box-shadow: 0 0 0 1px var(--line); }
 [data-theme="dark"] .source-card p { color: #c4cad8; }
 [data-theme="dark"] .decision-bar { background: rgba(18, 26, 44, 0.93); }
 [data-theme="dark"] .composer { border-color: var(--line); background: #121a2c; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
 [data-theme="dark"] .composer-heading button,
-[data-theme="dark"] .composer textarea { background: #0e1627; color: var(--ink); }
+[data-theme="dark"] .composer textarea,
+[data-theme="dark"] .edit-grid input { background: #0e1627; color: var(--ink); }
 [data-theme="dark"] .action-menu { border-color: var(--line); background: #151f34; }
 [data-theme="dark"] .header-actions .action-menu button:hover { background: #202a42; }
 [data-theme="dark"] .settings-status { border-color: var(--line); background: #0e1627; }

@@ -36,6 +36,13 @@
       "when": 1784178161010,
       "tag": "0004_simple_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784452503838,
+      "tag": "0005_naive_slapstick",
+      "breakpoints": true
     }
   ]
 }

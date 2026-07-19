@@ -8,11 +8,15 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const reviewStatus = pgEnum("review_status", ["confirmed", "review", "conflict"]);
 export const sourceKind = pgEnum("source_kind", ["message", "voice", "image", "document"]);
 export const sourceRole = pgEnum("source_role", ["teacher", "group-lead", "student"]);
+export const workspaceRole = pgEnum("workspace_role", ["owner", "admin", "member"]);
+export const invitationRole = pgEnum("invitation_role", ["admin", "member"]);
+export const profileLocale = pgEnum("profile_locale", ["ru", "en"]);
 
 export const groups = pgTable("groups", {
   id: text("id").primaryKey(),
@@ -22,11 +26,83 @@ export const groups = pgTable("groups", {
     .notNull()
     .unique()
     .default(sql`gen_random_uuid()::text`),
+  calendarSubscriptionToken: text("calendar_subscription_token")
+    .unique()
+    .default(sql`gen_random_uuid()::text`),
   trustedUsernames: jsonb("trusted_usernames").$type<string[]>().notNull().default([]),
   dailyBriefEnabled: boolean("daily_brief_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const userProfiles = pgTable("user_profiles", {
+  userId: text("user_id").primaryKey(),
+  displayName: text("display_name"),
+  locale: profileLocale("locale").notNull().default("ru"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const groupMemberships = pgTable(
+  "group_memberships",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    role: workspaceRole("role").notNull().default("member"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("group_memberships_group_user_uidx").on(table.groupId, table.userId),
+    index("group_memberships_user_id_idx").on(table.userId),
+    index("group_memberships_group_id_idx").on(table.groupId),
+  ],
+);
+
+export const groupInvitations = pgTable(
+  "group_invitations",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    role: invitationRole("role").notNull().default("member"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("group_invitations_group_id_idx").on(table.groupId),
+    index("group_invitations_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const workspaceActivities = pgTable(
+  "workspace_activities",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id"),
+    action: text("action").notNull(),
+    details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("workspace_activities_group_id_idx").on(table.groupId)],
+);
 
 export const events = pgTable(
   "events",
@@ -96,6 +172,21 @@ export const eventActivities = pgTable(
 
 export const groupsRelations = relations(groups, ({ many }) => ({
   events: many(events),
+  memberships: many(groupMemberships),
+  invitations: many(groupInvitations),
+  workspaceActivity: many(workspaceActivities),
+}));
+
+export const groupMembershipsRelations = relations(groupMemberships, ({ one }) => ({
+  group: one(groups, { fields: [groupMemberships.groupId], references: [groups.id] }),
+}));
+
+export const groupInvitationsRelations = relations(groupInvitations, ({ one }) => ({
+  group: one(groups, { fields: [groupInvitations.groupId], references: [groups.id] }),
+}));
+
+export const workspaceActivitiesRelations = relations(workspaceActivities, ({ one }) => ({
+  group: one(groups, { fields: [workspaceActivities.groupId], references: [groups.id] }),
 }));
 
 export const eventsRelations = relations(events, ({ one, many }) => ({
@@ -115,3 +206,7 @@ export const eventActivitiesRelations = relations(eventActivities, ({ one }) => 
 export type EventRow = typeof events.$inferSelect;
 export type SourceRow = typeof sources.$inferSelect;
 export type EventActivityRow = typeof eventActivities.$inferSelect;
+export type UserProfileRow = typeof userProfiles.$inferSelect;
+export type GroupMembershipRow = typeof groupMemberships.$inferSelect;
+export type GroupInvitationRow = typeof groupInvitations.$inferSelect;
+export type WorkspaceActivityRow = typeof workspaceActivities.$inferSelect;

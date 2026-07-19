@@ -1,0 +1,1 @@
+ALTER TABLE "group_invitations" ADD COLUMN "accepted_by_user_id" text;

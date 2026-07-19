@@ -59,6 +59,9 @@ export const groupMemberships = pgTable(
   },
   (table) => [
     uniqueIndex("group_memberships_group_user_uidx").on(table.groupId, table.userId),
+    uniqueIndex("group_memberships_single_owner_uidx")
+      .on(table.groupId)
+      .where(sql`${table.role} = 'owner'`),
     index("group_memberships_user_id_idx").on(table.userId),
     index("group_memberships_group_id_idx").on(table.groupId),
   ],
@@ -78,6 +81,7 @@ export const groupInvitations = pgTable(
     role: invitationRole("role").notNull().default("member"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedByUserId: text("accepted_by_user_id"),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -94,6 +94,21 @@ export async function findGroupByAccessToken(accessToken: string) {
   return group ?? null;
 }
 
+export async function findGroupByCalendarToken(calendarToken: string) {
+  const db = getDb();
+  const [group] = await db
+    .select({ id: groups.id, name: groups.name })
+    .from(groups)
+    .where(eq(groups.calendarSubscriptionToken, calendarToken))
+    .limit(1);
+  return group ?? null;
+}
+
+export async function findGroupByLegacyCalendarToken(accessToken: string) {
+  const group = await findGroupByAccessToken(accessToken);
+  return group ? { id: group.id, name: group.name } : null;
+}
+
 export async function findGroupById(id: string) {
   const db = getDb();
   const [group] = await db

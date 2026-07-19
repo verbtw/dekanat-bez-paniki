@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { demoItems } from "./demo-data";
-import { buildCalendarEvent, buildGroupCalendar, calendarFilename } from "./calendar";
+import {
+  buildCalendarEvent,
+  buildCalendarFeedUrl,
+  buildGroupCalendar,
+  calendarFilename,
+} from "./calendar";
 
 describe("calendar export", () => {
   it("builds a portable one-hour ICS event", () => {
@@ -30,5 +35,11 @@ describe("calendar export", () => {
     expect(calendar).toContain("Лекция отменена");
     expect(calendar).not.toContain("Лабораторная №2 перенесена");
     expect(calendar).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT15M");
+  });
+
+  it("uses the dedicated token parameter for subscription URLs", () => {
+    const url = buildCalendarFeedUrl("https://morrow.example", "calendar-secret");
+    expect(url).toBe("https://morrow.example/api/calendar?token=calendar-secret");
+    expect(url).not.toContain("workspace=");
   });
 });

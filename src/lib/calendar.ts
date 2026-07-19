@@ -89,3 +89,9 @@ export function calendarFilename(item: InboxItem) {
     .slice(0, 54);
   return `${safeTitle || "event"}.ics`;
 }
+
+export function buildCalendarFeedUrl(origin: string, token: string) {
+  const url = new URL("/api/calendar", origin);
+  url.searchParams.set("token", token);
+  return url.toString();
+}

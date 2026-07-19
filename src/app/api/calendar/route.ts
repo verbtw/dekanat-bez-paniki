@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import { findGroupByAccessToken, listEvents } from "@/db/repository";
+import {
+  findGroupByCalendarToken,
+  findGroupByLegacyCalendarToken,
+  listEvents,
+} from "@/db/repository";
 import { buildGroupCalendar } from "@/lib/calendar";
 import { demoItems } from "@/lib/demo-data";
 
@@ -15,8 +19,9 @@ function safeFilename(name: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
-  if (!workspace) {
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const legacyToken = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
+  if (!token && !legacyToken) {
     return new NextResponse(buildGroupCalendar(demoItems, "ИВТ-101 · демо"), {
       headers: {
         "content-type": "text/calendar; charset=utf-8",
@@ -35,23 +40,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const group = await findGroupByAccessToken(workspace);
+    const group = token
+      ? await findGroupByCalendarToken(token)
+      : await findGroupByLegacyCalendarToken(legacyToken);
     if (!group) {
       return NextResponse.json(
-        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
+        { error: "Календарь не найден.", code: "CALENDAR_NOT_FOUND" },
         { status: 404 },
       );
     }
-
-    const groupName = group.name;
     const items = await listEvents(group.id);
-    const calendar = buildGroupCalendar(items, `${groupName} · Morrow`);
-
-    return new NextResponse(calendar, {
+    return new NextResponse(buildGroupCalendar(items, `${group.name} · Morrow`), {
       headers: {
         "content-type": "text/calendar; charset=utf-8",
-        "content-disposition": `inline; filename="${safeFilename(groupName)}"`,
-        "cache-control": "private, max-age=60, stale-while-revalidate=300",
+        "content-disposition": `inline; filename="${safeFilename(group.name)}"`,
+        "cache-control": "private, no-store",
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow",
       },

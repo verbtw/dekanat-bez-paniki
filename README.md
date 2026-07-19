@@ -6,7 +6,7 @@ Morrow превращает сообщения из университетски
 
 ## Демо
 
-- Web: [dekanat-bez-paniki.vercel.app](https://dekanat-bez-paniki.vercel.app)
+- Web: [morrow-sync.vercel.app](https://morrow-sync.vercel.app)
 - Telegram: [@dekanat_panic_test_bot](https://t.me/dekanat_panic_test_bot)
 
 Сайт устанавливается как отдельная программа: на Android/Windows/macOS используйте кнопку «Установить», на iPhone — Safari → «Поделиться» → «На экран Домой». Приложение запускается в отдельном окне и сохраняет local-first демо для базовой офлайн-работы.

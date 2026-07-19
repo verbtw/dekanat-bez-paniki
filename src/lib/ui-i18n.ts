@@ -1,6 +1,17 @@
 export type UiLocale = "ru" | "en";
 
 const englishByRussian: Record<string, string> = {
+  "Создать аккаунт": "Create account",
+  "Войти": "Sign in",
+  "Выйти": "Sign out",
+  "Создать пространство": "Create workspace",
+  "Подключить Telegram-группу": "Connect Telegram group",
+  "Название пространства": "Workspace name",
+  "Аккаунт": "Account",
+  "Продолжить с демо": "Continue with demo",
+  "Нет аккаунта?": "No account?",
+  "Уже есть аккаунт?": "Already have an account?",
+  "Забыли пароль?": "Forgot password?",
   "Рабочее пространство": "Workspace",
   "Основная навигация": "Main navigation",
   "Входящие": "Inbox",

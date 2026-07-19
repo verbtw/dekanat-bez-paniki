@@ -19,4 +19,12 @@ describe("UI localization", () => {
     expect(translateUiText("20 September", "ru")).toBe("20 сентября");
     expect(translateUiText("Установить приложение", "en")).toBe("Install app");
   });
+
+  it("translates account and onboarding copy", () => {
+    expect(translateUiText("Создать аккаунт", "en")).toBe("Create account");
+    expect(translateUiText("Войти", "en")).toBe("Sign in");
+    expect(translateUiText("Создать пространство", "en")).toBe("Create workspace");
+    expect(translateUiText("Подключить Telegram-группу", "en")).toBe("Connect Telegram group");
+    expect(translateUiText("Create account", "ru")).toBe("Создать аккаунт");
+  });
 });

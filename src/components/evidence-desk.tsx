@@ -54,7 +54,7 @@ async function pushEventToServer(item: InboxItem, workspace: string) {
     const response = await fetch("/api/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ item, workspace }),
+      body: JSON.stringify({ item, groupId: workspace }),
     });
     return response.ok ? "database" as const : "failed" as const;
   } catch {
@@ -68,7 +68,7 @@ async function pushStatusToServer(id: string, status: ReviewStatus, workspace: s
     const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status, workspace }),
+      body: JSON.stringify({ status, groupId: workspace }),
     });
     return response.ok ? "database" as const : "failed" as const;
   } catch {
@@ -82,7 +82,7 @@ async function pushEventEditToServer(id: string, event: EditableEvent, workspace
     const response = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ event, workspace }),
+      body: JSON.stringify({ event, groupId: workspace }),
     });
     return response.ok ? "database" as const : "failed" as const;
   } catch {
@@ -93,7 +93,7 @@ async function pushEventEditToServer(id: string, event: EditableEvent, workspace
 async function deleteEventFromServer(id: string, workspace: string) {
   if (!workspace) return "local" as const;
   try {
-    const suffix = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
+    const suffix = workspace ? `?groupId=${encodeURIComponent(workspace)}` : "";
     const response = await fetch(`/api/events/${encodeURIComponent(id)}${suffix}`, {
       method: "DELETE",
     });
@@ -434,7 +434,15 @@ function RadarView({ items, onOpen }: { items: InboxItem[]; onOpen: (id: string)
   );
 }
 
-export function EvidenceDesk() {
+export function EvidenceDesk({
+  workspaceId = "",
+  initialWorkspaceName = "ИВТ-101 · демо",
+  calendarToken = null,
+}: {
+  workspaceId?: string;
+  initialWorkspaceName?: string;
+  calendarToken?: string | null;
+} = {}) {
   const [items, setItems] = useState(demoItems);
   const [selectedId, setSelectedId] = useState(demoItems[0].id);
   const [activeNav, setActiveNav] = useState<NavId>("inbox");
@@ -451,9 +459,9 @@ export function EvidenceDesk() {
   const [theme, setTheme] = useState<Theme>("light");
   const [locale, setLocale] = useState<UiLocale>("ru");
   const [localeReady, setLocaleReady] = useState(false);
-  const [workspaceToken, setWorkspaceToken] = useState("");
+  const [workspaceToken, setWorkspaceToken] = useState(workspaceId);
   const [requestedEventId, setRequestedEventId] = useState("");
-  const [workspaceName, setWorkspaceName] = useState("ИВТ-101 · демо");
+  const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [storageMode, setStorageMode] = useState<StorageMode>("checking");
@@ -471,12 +479,9 @@ export function EvidenceDesk() {
       setLocaleReady(true);
       const params = new URLSearchParams(window.location.search);
       const isShareTarget = params.get("share") === "1";
-      const urlWorkspace = params.get("workspace")?.trim() || "";
-      const workspace = urlWorkspace || (isShareTarget
-        ? window.localStorage.getItem("dbp:last-workspace")?.trim() || ""
-        : "");
+      const urlWorkspace = params.get("groupId")?.trim() || params.get("workspace")?.trim() || "";
+      const workspace = workspaceId || urlWorkspace;
       setWorkspaceToken(workspace);
-      if (urlWorkspace) window.localStorage.setItem("dbp:last-workspace", urlWorkspace);
       setRequestedEventId(params.get("event")?.trim() || "");
       const requestedView = params.get("view");
       if (navItems.some((item) => item.id === requestedView)) setActiveNav(requestedView as NavId);
@@ -491,14 +496,14 @@ export function EvidenceDesk() {
           setComposerOpen(true);
         }
         const cleanUrl = new URL(window.location.origin + window.location.pathname);
-        if (workspace) cleanUrl.searchParams.set("workspace", workspace);
+        if (workspace) cleanUrl.searchParams.set("groupId", workspace);
         window.history.replaceState(null, "", cleanUrl);
       }
       setWorkspaceReady(true);
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!localeReady) return;
@@ -571,7 +576,7 @@ export function EvidenceDesk() {
     const controller = new AbortController();
 
     const endpoint = workspaceToken
-      ? `/api/events?workspace=${encodeURIComponent(workspaceToken)}`
+      ? `/api/events?groupId=${encodeURIComponent(workspaceToken)}`
       : "/api/events";
     fetch(endpoint, { signal: controller.signal })
       .then(async (response) => {
@@ -663,7 +668,7 @@ export function EvidenceDesk() {
       const results: SyncResult[] = items.length
         ? await Promise.all(items.map((item) => pushEventToServer(item, workspaceToken)))
         : workspaceToken
-          ? [await fetch(`/api/events?workspace=${encodeURIComponent(workspaceToken)}`)
+          ? [await fetch(`/api/events?groupId=${encodeURIComponent(workspaceToken)}`)
             .then((response) => response.ok ? "database" as const : "failed" as const)
             .catch(() => "failed" as const)]
           : ["local"];
@@ -692,7 +697,7 @@ export function EvidenceDesk() {
 
   function buildAppUrl(eventId?: string, includeWorkspace = true) {
     const url = new URL(window.location.origin + window.location.pathname);
-    if (includeWorkspace && workspaceToken) url.searchParams.set("workspace", workspaceToken);
+    if (includeWorkspace && workspaceToken) url.searchParams.set("groupId", workspaceToken);
     if (eventId) url.searchParams.set("event", eventId);
     if (!eventId && activeNav !== "inbox") url.searchParams.set("view", activeNav);
     return url.toString();
@@ -782,7 +787,7 @@ export function EvidenceDesk() {
 
   function calendarFeedUrl() {
     const url = new URL("/api/calendar", window.location.origin);
-    if (workspaceToken) url.searchParams.set("workspace", workspaceToken);
+    if (calendarToken) url.searchParams.set("token", calendarToken);
     return url.toString();
   }
 
@@ -1362,12 +1367,12 @@ export function EvidenceDesk() {
                   : "Демо и эксперименты хранятся только в этом браузере")}</small>
               </div>
             </div>
-            <p>{workspaceToken ? "Эта ссылка даёт доступ к событиям Telegram-группы. Передавай её только участникам группы." : "Сейчас открыто публичное демо. Персональная рабочая ссылка появится после сообщения Telegram-боту."}</p>
+            <p>{workspaceToken ? "Доступ управляется аккаунтами и ролями участников пространства." : "Сейчас открыто публичное демо. Его данные сохраняются только на этом устройстве."}</p>
             <div className="calendar-connect">
               <span className="calendar-connect-icon">□</span>
               <div><strong>Живой календарь группы</strong><small>Только подтверждённые события. Google, Apple и Outlook проверяют эту ленту автоматически.</small></div>
               <button type="button" onClick={() => void copyCalendarFeed()}>Копировать URL</button>
-              <a href={workspaceToken ? `/api/calendar?workspace=${encodeURIComponent(workspaceToken)}` : "/api/calendar"} download>Скачать .ics</a>
+              <a href={calendarToken ? `/api/calendar?token=${encodeURIComponent(calendarToken)}` : "/api/calendar"} download>Скачать .ics</a>
             </div>
             <div className="backup-connect">
               <span className="calendar-connect-icon">⇩</span>

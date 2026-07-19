@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/db/client";
-import {
-  deleteEvent,
-  findGroupByAccessToken,
-  updateEventFields,
-  updateEventStatus,
-} from "@/db/repository";
+import { deleteEvent, updateEventFields, updateEventStatus } from "@/db/repository";
+import { requireWorkspaceAccess } from "@/lib/auth/workspace-guard";
 import { editableEventSchema, reviewStatusSchema } from "@/lib/event-validation";
-
-async function resolveGroupId(workspace: string) {
-  const group = await findGroupByAccessToken(workspace);
-  return { groupId: group?.id ?? "", found: Boolean(group) };
-}
+import { HttpError, toErrorResponse } from "@/lib/http-error";
 
 export async function PATCH(
   request: NextRequest,
@@ -23,58 +15,34 @@ export async function PATCH(
       { status: 503 },
     );
   }
-
   const { id } = await params;
   const body: unknown = await request.json().catch(() => null);
   const objectBody = typeof body === "object" && body !== null ? body : {};
+  const groupId = "groupId" in objectBody && typeof objectBody.groupId === "string" ? objectBody.groupId.trim() : "";
   const parsedStatus = reviewStatusSchema.safeParse("status" in objectBody ? objectBody.status : null);
   const parsedEvent = editableEventSchema.safeParse("event" in objectBody ? objectBody.event : null);
-  if (!parsedStatus.success && !parsedEvent.success) {
+  if (!groupId || (!parsedStatus.success && !parsedEvent.success)) {
     return NextResponse.json(
       { error: "Некорректные данные события.", code: "VALIDATION_FAILED" },
       { status: 400 },
     );
   }
-
   try {
-    const workspace =
-      typeof body === "object" && body !== null && "workspace" in body && typeof body.workspace === "string"
-        ? body.workspace.trim()
-        : "";
-    if (!workspace) {
-      return NextResponse.json(
-        { error: "Публичное демо изменяется только локально.", code: "WORKSPACE_REQUIRED" },
-        { status: 403 },
-      );
-    }
-    const { groupId, found } = await resolveGroupId(workspace);
-    if (!found) {
-      return NextResponse.json(
-        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
-        { status: 404 },
-      );
-    }
+    await requireWorkspaceAccess(groupId);
     const updated = parsedEvent.success
       ? await updateEventFields(id, parsedEvent.data, groupId)
       : await updateEventStatus(id, parsedStatus.data!, groupId);
-    if (!updated) {
-      return NextResponse.json({ error: "Событие не найдено." }, { status: 404 });
-    }
+    if (!updated) return NextResponse.json({ error: "Событие не найдено.", code: "NOT_FOUND" }, { status: 404 });
     if ("blocked" in updated) {
       return NextResponse.json(
-        {
-          error: "Конфликт нельзя закрыть сменой статуса — сначала исправьте расходящиеся поля.",
-          code: updated.blocked,
-        },
+        { error: "Конфликт нельзя закрыть до исправления полей.", code: updated.blocked },
         { status: 409 },
       );
     }
     return NextResponse.json({ updated });
-  } catch {
-    return NextResponse.json(
-      { error: "Не удалось обновить событие.", code: "DATABASE_WRITE_FAILED" },
-      { status: 500 },
-    );
+  } catch (error) {
+    if (error instanceof HttpError) return toErrorResponse(error);
+    return NextResponse.json({ error: "Не удалось обновить событие.", code: "DATABASE_WRITE_FAILED" }, { status: 500 });
   }
 }
 
@@ -88,30 +56,18 @@ export async function DELETE(
       { status: 503 },
     );
   }
-
   const { id } = await params;
-  const workspace = request.nextUrl.searchParams.get("workspace")?.trim() ?? "";
-  if (!workspace) {
-    return NextResponse.json(
-      { error: "Публичное демо изменяется только локально.", code: "WORKSPACE_REQUIRED" },
-      { status: 403 },
-    );
+  const groupId = request.nextUrl.searchParams.get("groupId")?.trim() ?? "";
+  if (!groupId) {
+    return NextResponse.json({ error: "Рабочее пространство не указано.", code: "WORKSPACE_REQUIRED" }, { status: 400 });
   }
   try {
-    const { groupId, found } = await resolveGroupId(workspace);
-    if (!found) {
-      return NextResponse.json(
-        { error: "Рабочее пространство не найдено.", code: "WORKSPACE_NOT_FOUND" },
-        { status: 404 },
-      );
-    }
+    await requireWorkspaceAccess(groupId);
     const deleted = await deleteEvent(id, groupId);
-    if (!deleted) return NextResponse.json({ error: "Событие не найдено." }, { status: 404 });
+    if (!deleted) return NextResponse.json({ error: "Событие не найдено.", code: "NOT_FOUND" }, { status: 404 });
     return NextResponse.json({ deleted: true, id });
-  } catch {
-    return NextResponse.json(
-      { error: "Не удалось удалить событие.", code: "DATABASE_WRITE_FAILED" },
-      { status: 500 },
-    );
+  } catch (error) {
+    if (error instanceof HttpError) return toErrorResponse(error);
+    return NextResponse.json({ error: "Не удалось удалить событие.", code: "DATABASE_WRITE_FAILED" }, { status: 500 });
   }
 }

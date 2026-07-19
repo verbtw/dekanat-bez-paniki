@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { WorkspaceRole } from "@/lib/auth/access-control";
-import { hashCredential } from "@/lib/auth/invitations";
+import type { WorkspaceRole } from "../lib/auth/access-control";
+import { hashCredential } from "../lib/auth/invitations";
 import { getDb } from "./client";
 import {
   groupInvitations,

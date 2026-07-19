@@ -9,6 +9,11 @@ const englishByRussian: Record<string, string> = {
   "Радар": "Radar",
   "События": "Events",
   "Источники": "Sources",
+  "источник": "source",
+  "источника": "sources",
+  "сообщение": "message",
+  "сообщения": "messages",
+  "сообщений": "messages",
   "демо-режим": "demo mode",
   "Настройки группы": "Group settings",
   "Тёмная тема": "Dark theme",
@@ -170,6 +175,7 @@ const englishByRussian: Record<string, string> = {
   "Новое сообщение": "New message",
   "Вставь сообщение из учебного чата. Приложение попробует найти предмет, дату, время и аудиторию.": "Paste a message from your study chat. The app will try to find the subject, date, time, and room.",
   "Установить Morrow": "Install Morrow",
+  "Установить приложение": "Install app",
   "Отдельное окно, иконка и быстрый запуск с рабочего стола.": "A dedicated window, app icon, and quick launch from your desktop.",
   "Установить": "Install",
   "Скрыть предложение установки": "Dismiss install suggestion",
@@ -188,7 +194,7 @@ const russianMonths: Record<string, string> = {
   сентябрь: "September", октябрь: "October", ноябрь: "November", декабрь: "December",
 };
 
-function translateText(value: string, locale: UiLocale) {
+export function translateUiText(value: string, locale: UiLocale) {
   const surrounding = value.match(/^(\s*)([\s\S]*?)(\s*)$/);
   if (!surrounding) return value;
   const [, before, core, after] = surrounding;
@@ -197,7 +203,9 @@ function translateText(value: string, locale: UiLocale) {
 
   if (locale === "en") {
     translated = translated
-      .replace(/(\d+) источника?/g, "$1 sources")
+      .replace(/1 источник/g, "1 source")
+      .replace(/(\d+) источника/g, "$1 sources")
+      .replace(/1 сообщение/g, "1 message")
       .replace(/(\d+) сообщени(?:е|я|й)/g, "$1 messages")
       .replace(/(\d+) авторов/g, "$1 authors")
       .replace(/(\d+) требуют решения/g, "$1 need a decision");
@@ -209,7 +217,9 @@ function translateText(value: string, locale: UiLocale) {
       translated = translated.replace(new RegExp(english, "gi"), russian);
     }
     translated = translated
+      .replace(/1 source/g, "1 источник")
       .replace(/(\d+) sources/g, "$1 источника")
+      .replace(/1 message/g, "1 сообщение")
       .replace(/(\d+) messages/g, "$1 сообщения")
       .replace(/(\d+) authors/g, "$1 авторов")
       .replace(/(\d+) need a decision/g, "$1 требуют решения");
@@ -224,7 +234,7 @@ export function localizeInterface(root: HTMLElement, locale: UiLocale) {
   while (node) {
     const next = walker.nextNode();
     const value = node.nodeValue ?? "";
-    const translated = translateText(value, locale);
+    const translated = translateUiText(value, locale);
     if (translated !== value) node.nodeValue = translated;
     node = next;
   }
@@ -233,7 +243,7 @@ export function localizeInterface(root: HTMLElement, locale: UiLocale) {
     for (const attribute of ["aria-label", "placeholder", "title"]) {
       const value = element.getAttribute(attribute);
       if (!value) continue;
-      const translated = translateText(value, locale);
+      const translated = translateUiText(value, locale);
       if (translated !== value) element.setAttribute(attribute, translated);
     }
   });

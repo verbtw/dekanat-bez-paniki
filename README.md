@@ -123,7 +123,7 @@ npm run check
 npm run test:e2e
 ```
 
-Полный браузерный сценарий регистрации включается переменными `E2E_EMAIL_TEMPLATE` (например, `morrow+{timestamp}@example.com`) и `E2E_PASSWORD`. Без них Playwright всё равно проверяет публичный демо-режим и безопасное поведение неподключённого Auth.
+Полный браузерный сценарий регистрации включается переменными `E2E_EMAIL_TEMPLATE` (например, disposable-адрес `morrow+{timestamp}@example.com`) и `E2E_PASSWORD`. Без них Playwright всё равно проверяет публичный демо-режим и безопасное поведение неподключённого Auth.
 
 ## Telegram
 

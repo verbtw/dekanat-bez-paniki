@@ -22,15 +22,24 @@ test("new account creates a workspace and signs out", async ({ page }) => {
     !emailTemplate?.includes("{timestamp}") || !process.env.E2E_PASSWORD,
     "E2E_EMAIL_TEMPLATE with {timestamp} and E2E_PASSWORD are required",
   );
-  const email = emailTemplate!.replace("{timestamp}", String(Date.now()));
+  const marker = String(Date.now());
+  const email = emailTemplate!.replace("{timestamp}", marker);
+  const workspaceName = `Morrow E2E ${marker}`;
   await page.goto("/auth/sign-up");
   await page.getByLabel("Имя").fill("Morrow E2E");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Пароль").fill(process.env.E2E_PASSWORD!);
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
-  await page.getByLabel("Название пространства").fill("Morrow E2E");
+  await page.getByLabel("Название пространства").fill(workspaceName);
   await page.getByRole("button", { name: "Создать пространство" }).click();
-  await expect(page.getByText("Morrow E2E").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Входящие" })).toBeVisible();
+  const ownerWorkspace = await page.evaluate(async (name) => {
+    const response = await fetch("/api/workspaces");
+    if (!response.ok) return null;
+    const data = await response.json() as { workspaces?: Array<{ name: string; role: string }> };
+    return data.workspaces?.find((workspace) => workspace.name === name) ?? null;
+  }, workspaceName);
+  expect(ownerWorkspace?.role).toBe("owner");
   await page.getByRole("button", { name: "Выйти" }).click();
   await expect(page).toHaveURL(/\/auth\/sign-in/);
 });

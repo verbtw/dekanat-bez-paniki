@@ -14,10 +14,26 @@ export function MorrowApp() {
   const [demo, setDemo] = useState(false);
 
   async function load() {
+    const legacyToken = new URLSearchParams(window.location.search).get("workspace")?.trim();
+    if (legacyToken) sessionStorage.setItem("morrow:pending-claim", legacyToken);
     const sessionResponse = await fetch("/api/session", { cache: "no-store" });
     const session = await sessionResponse.json() as { user: User | null };
     setUser(session.user);
     if (!session.user) return;
+    for (const [key, endpoint] of [
+      ["morrow:pending-claim", "/api/workspaces/claim"],
+      ["morrow:pending-invite", "/api/workspaces/invitations/accept"],
+    ] as const) {
+      const token = sessionStorage.getItem(key);
+      if (!token) continue;
+      const accepted = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (accepted.ok) sessionStorage.removeItem(key);
+    }
+    if (legacyToken) window.history.replaceState(null, "", window.location.pathname);
     const response = await fetch("/api/workspaces", { cache: "no-store" });
     const data = await response.json() as { workspaces?: WorkspaceSummary[] };
     const next = data.workspaces ?? [];

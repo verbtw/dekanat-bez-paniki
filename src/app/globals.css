@@ -1396,6 +1396,12 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--cobalt) 32%
 .account-bar > div { display: grid; padding-left: 10px; border-left: 1px solid var(--line); }
 .account-bar > div strong { font-size: 11px; }.account-bar > div small { color: var(--muted); font-size: 8px; }
 .account-bar > button { border: 0; padding: 8px 10px; border-radius: 9px; color: var(--muted); background: var(--surface); cursor: pointer; }
+.account-popover { position: absolute; top: calc(100% + 9px); right: 0; width: min(340px, calc(100vw - 24px)); display: grid !important; gap: 10px; padding: 22px !important; border: 1px solid var(--line) !important; border-radius: 18px; background: var(--white); box-shadow: var(--shadow-lg); }
+.account-popover h3, .account-popover p { margin: 0; }.account-popover p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.account-popover button:not(.popover-close) { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--surface); text-align: left; cursor: pointer; }
+.account-popover input { width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--surface); font-size: 9px; }
+.popover-close { position: absolute; top: 10px; right: 10px; border: 0; color: var(--muted); background: transparent; cursor: pointer; }
+.link-button { display: grid; place-items: center; margin-top: 22px; text-decoration: none; }
 .app-loading { min-height: 100svh; display: grid; place-content: center; gap: 15px; color: var(--cobalt-deep); font-size: 28px; font-weight: 800; background: var(--canvas); }
 .app-loading i { width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--cobalt), transparent); animation: syncPulse 1.2s infinite; }
 

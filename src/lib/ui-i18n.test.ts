@@ -27,4 +27,10 @@ describe("UI localization", () => {
     expect(translateUiText("Подключить Telegram-группу", "en")).toBe("Connect Telegram group");
     expect(translateUiText("Create account", "ru")).toBe("Создать аккаунт");
   });
+
+  it("translates safe invitation states", () => {
+    expect(translateUiText("Приглашение принято", "en")).toBe("Invitation accepted");
+    expect(translateUiText("Ссылка недействительна", "en")).toBe("This link is invalid");
+    expect(translateUiText("Обновить ссылку календаря", "en")).toBe("Rotate calendar link");
+  });
 });

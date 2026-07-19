@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, callback: "conflict-blocked", eventId });
     }
 
-    const appUrl = process.env.APP_URL?.trim() || "https://morrow-sync.vercel.app";
+    const appUrl = process.env.APP_URL?.trim() || "https://morrow.vercel.app";
     const group = await findGroupById(groupId).catch(() => null);
     const workspaceUrl = buildWorkspaceEventUrl(appUrl, group?.accessToken, eventId);
     await Promise.all([
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "missing-identifiers" });
   }
 
-  const appUrl = process.env.APP_URL?.trim() || "https://morrow-sync.vercel.app";
+  const appUrl = process.env.APP_URL?.trim() || "https://morrow.vercel.app";
   const command = parseTelegramCommand(text);
   if (command) {
     let replyText: string;

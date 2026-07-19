@@ -17,6 +17,15 @@ describe("getAuthConfig", () => {
     ).toThrow("32 characters");
   });
 
+  it("rejects provisioning placeholders and relative URLs", () => {
+    expect(() =>
+      getAuthConfig({
+        NEON_AUTH_BASE_URL: "provisioning/",
+        NEON_AUTH_COOKIE_SECRET: "x".repeat(32),
+      }),
+    ).toThrow("absolute HTTP URL");
+  });
+
   it("returns valid explicit configuration", () => {
     expect(
       getAuthConfig({

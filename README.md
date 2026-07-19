@@ -19,6 +19,7 @@ Morrow превращает сообщения из университетски
 
 - Next.js 16, React 19, TypeScript;
 - Neon PostgreSQL и Drizzle ORM;
+- Neon Auth на базе Better Auth для аккаунтов и защищённых сессий;
 - Telegram Bot API с защищённым webhook;
 - Zod для проверки входных данных;
 - Vitest и ESLint;
@@ -83,6 +84,10 @@ Morrow превращает сообщения из университетски
 - установленная программа проверяет обновления service worker каждый час и безопасно активирует новый релиз;
 - мобильный app-shell с нижней навигацией и safe-area для iPhone/Android;
 - тесты критичных сценариев парсинга.
+- регистрация, вход, восстановление пароля и безопасный выход;
+- несколько пространств на аккаунт с ролями owner/admin/member;
+- одноразовые приглашения и безопасное подключение Telegram-группы;
+- отдельный revocable token календаря вместо ключа доступа к workspace;
 - единая проверка `npm run check`: ESLint, Vitest и production-сборка.
 
 ## Быстрый запуск
@@ -91,6 +96,15 @@ Morrow превращает сообщения из университетски
 npm install
 npm run dev
 ```
+
+Для аккаунтов также нужны:
+
+```text
+NEON_AUTH_BASE_URL=https://...neonauth.../auth
+NEON_AUTH_COOKIE_SECRET=случайная-строка-не-короче-32-символов
+```
+
+Создать cookie-secret можно командой `openssl rand -base64 32`. Он должен быть стабильным между деплоями и храниться только в защищённых environment variables.
 
 Откройте [http://localhost:3000](http://localhost:3000), нажмите «Добавить» и вставьте сообщение:
 
@@ -106,7 +120,10 @@ npm run test
 npm run build
 # или всё сразу
 npm run check
+npm run test:e2e
 ```
+
+Полный браузерный сценарий регистрации включается переменными `E2E_EMAIL_TEMPLATE` (например, `morrow+{timestamp}@example.com`) и `E2E_PASSWORD`. Без них Playwright всё равно проверяет публичный демо-режим и безопасное поведение неподключённого Auth.
 
 ## Telegram
 
@@ -153,8 +170,12 @@ Production использует управляемую Neon PostgreSQL. Сохр
 ## API
 
 - `GET /api/health` — состояние базы и Telegram.
-- `GET /api/events?workspace=...` — события демо или конкретной группы.
-- `POST /api/events` — сохранить событие в демо или рабочем пространстве.
+- `GET /api/session` — безопасный профиль текущей сессии.
+- `GET|POST /api/workspaces` — пространства текущего пользователя.
+- `POST /api/workspaces/claim` — первое безопасное подключение Telegram-группы.
+- `POST /api/workspaces/invitations` — приглашение участника владельцем или администратором.
+- `GET /api/events?groupId=...` — события демо или доступной группы.
+- `POST /api/events` — сохранить событие после проверки membership.
 - `PATCH /api/events/:id` — изменить статус события в пределах группы.
 - `POST /api/telegram/webhook` — входящие Telegram updates.
 
@@ -168,4 +189,4 @@ Production использует управляемую Neon PostgreSQL. Сохр
 2. Поиск противоречий между источниками.
 3. Фоновые задачи и повторные попытки обработки.
 4. Групповой календарь и уведомления.
-5. Авторизация и несколько учебных групп.
+5. OAuth-провайдеры и университетский SSO.
